@@ -161,11 +161,6 @@ async function kaydet(durum) {
                 </template>
               </FormAlani>
             </div>
-
-            <label class="onay-kutusu">
-              <input v-model="vm.model.sartBelgeZorunlu" type="checkbox" />
-              <span>Öğrenci belgesi zorunlu (başvuruda dosya istenir, onay manuel yapılır)</span>
-            </label>
           </div>
         </AppKart>
 
