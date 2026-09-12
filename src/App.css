@@ -328,8 +328,9 @@ h1, h2, h3 { font-family: var(--display); letter-spacing: -0.028em; margin: 0; l
 .detay__kapak {
   margin: 0 0 28px; border-radius: var(--r-l); overflow: hidden;
   border: 1px solid var(--line); background: var(--surface);
+  display: flex; justify-content: center; align-items: center;
 }
-.detay__kapak img { display: block; width: 100%; max-height: 380px; object-fit: contain; padding: 20px; }
+.detay__kapak img { display: block; width: auto; max-width: 100%; max-height: 240px; object-fit: contain; padding: 16px; }
 
 .detay__duzen { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 30px; align-items: start; }
 .detay__ana { display: flex; flex-direction: column; gap: 30px; min-width: 0; }
@@ -369,9 +370,19 @@ h1, h2, h3 { font-family: var(--display); letter-spacing: -0.028em; margin: 0; l
 .basvurdum p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
 
 .yan-kutu { padding: 18px 20px; border-radius: var(--r-l); border: 1px solid var(--line); background: var(--paper-2); }
-.yan-kutu h3 { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
-.yan-kutu__sirket { margin: 0; font-size: 15.5px; font-weight: 600; }
-.yan-kutu__alt { margin: 3px 0 0; font-size: 13px; color: var(--ink-2); }
+.yan-kutu h3 { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 12px; }
+.duzenleyen-kart { display: flex; align-items: center; gap: 14px; }
+.duzenleyen-logo-kutu {
+  width: 52px; height: 52px; min-width: 52px; max-width: 52px;
+  border-radius: 12px; background: #fff; border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; padding: 6px; flex: none; box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+.duzenleyen-logo { width: 100%; height: 100%; max-width: 40px; max-height: 40px; object-fit: contain; display: block; }
+.duzenleyen-logo-yedek { background: var(--paper); font-weight: 700; font-size: 16px; color: var(--ink); }
+.duzenleyen-bilgi { min-width: 0; flex: 1; }
+.yan-kutu__sirket { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--ink); word-break: break-word; }
+.yan-kutu__alt { margin: 3px 0 0; font-size: 12.5px; color: var(--ink-2); }
 
 /* ---------- yorumlar ---------- */
 .yorumlar { padding-top: 4px; }

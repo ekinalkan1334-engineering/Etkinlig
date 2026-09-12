@@ -129,7 +129,7 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
             <div v-if="!vm.basvurularYukleniyor.value && vm.basvurular.value.length" class="tablo-sarmal">
               <table class="tablo">
                 <thead>
-                  <tr><th>Öğrenci</th><th>Bölüm</th><th>Sınıf</th><th>Başvuru</th><th>Durum</th><th class="sag">İşlem</th></tr>
+                  <tr><th>Öğrenci</th><th>Bölüm</th><th>Sınıf</th><th>Başvuru</th><th>Durum</th><th>Yoklama</th><th class="sag">İşlem</th></tr>
                 </thead>
                 <tbody>
                   <tr v-for="b in vm.basvurular.value" :key="b.id">
@@ -153,6 +153,10 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
                     <td class="notr">{{ sinifEtiketi(b.ogrenci.sinif) }}</td>
                     <td class="notr">{{ tarih(b.basvuruTarihi) }} · {{ saat(b.basvuruTarihi) }}</td>
                     <td><DurumRozeti :durum="b.durum" kapsam="basvuru" /></td>
+                    <td>
+                      <span v-if="b.katildi" class="yoklandi">Katıldı</span>
+                      <span v-else class="notr">—</span>
+                    </td>
                     <td class="sag">
                       <div class="islemler">
                         <AppButton
@@ -284,6 +288,11 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 .aciklama { margin: 0; font-size: 14px; line-height: 1.7; color: var(--ink-2); }
 
 .basvuru-filtre { display: flex; gap: 9px; }
+.yoklandi {
+  display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  background: var(--sunum-tint); color: var(--sunum-deep); border: 1px solid var(--sunum-line);
+}
 .secim {
   height: 34px; border-radius: 9px; border: 1px solid var(--line);
   background: var(--surface); padding: 0 10px; font-size: 13px; color: var(--ink-2); cursor: pointer;

@@ -247,19 +247,69 @@ export default function EtkinlikDetay({ id }) {
 
           <div className="yan-kutu duzenleyen-kutu">
             <h3>Düzenleyen</h3>
-            <div className="duzenleyen-kart">
+            <div className="duzenleyen-kart" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               {sirketLogo ? (
-                <div className="duzenleyen-logo-kutu">
-                  <img src={sirketLogo} alt={etkinlik.sirket} className="duzenleyen-logo" />
+                <div
+                  className="duzenleyen-logo-kutu"
+                  style={{
+                    width: '52px',
+                    height: '52px',
+                    minWidth: '52px',
+                    maxWidth: '52px',
+                    borderRadius: '12px',
+                    background: '#fff',
+                    border: '1px solid var(--line, #e2e8f0)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    padding: '6px',
+                    flexShrink: 0,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                  }}
+                >
+                  <img
+                    src={sirketLogo}
+                    alt={etkinlik.sirket}
+                    className="duzenleyen-logo"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                  />
                 </div>
               ) : (
-                <div className="duzenleyen-logo-kutu duzenleyen-logo-yedek">
+                <div
+                  className="duzenleyen-logo-kutu duzenleyen-logo-yedek"
+                  style={{
+                    width: '52px',
+                    height: '52px',
+                    minWidth: '52px',
+                    maxWidth: '52px',
+                    borderRadius: '12px',
+                    background: 'var(--paper, #f8fafc)',
+                    border: '1px solid var(--line, #e2e8f0)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    color: 'var(--ink, #0f172a)',
+                    flexShrink: 0,
+                  }}
+                >
                   {basHarfler(etkinlik.sirket)}
                 </div>
               )}
-              <div className="duzenleyen-bilgi">
-                <p className="yan-kutu__sirket">{etkinlik.sirket}</p>
-                <p className="yan-kutu__alt">{TUR[etkinlik.tur]} · {etkinlik.kod}</p>
+              <div className="duzenleyen-bilgi" style={{ minWidth: 0, flex: 1 }}>
+                <p className="yan-kutu__sirket" style={{ margin: 0, fontSize: '15px', fontWeight: 600, lineHeight: 1.35, wordBreak: 'break-word' }}>
+                  {etkinlik.sirket}
+                </p>
+                <p className="yan-kutu__alt" style={{ margin: '3px 0 0', fontSize: '12.5px', color: 'var(--ink-2, #64748b)' }}>
+                  {TUR[etkinlik.tur]} · {etkinlik.kod}
+                </p>
               </div>
             </div>
           </div>
