@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppUstCubuk from '@/components/layout/AppUstCubuk.vue';
 import AppButton from '@/components/ui/AppButton.vue';
@@ -22,6 +22,8 @@ const tanimlar = useTanimlarStore();
 const oturum = useOturumStore();
 const vm = useEtkinlikDetay(Number(route.params.id));
 const raporAdresi = etkinlikService.raporAdresi(Number(route.params.id));
+
+const resimHatasi = ref(false);
 
 onMounted(() => vm.yukle());
 
@@ -74,12 +76,15 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
             <StatKart etiket="Boş kontenjan" :deger="vm.sayaclar.value.bos" :alt-bilgi="`${vm.etkinlik.value.kontenjan} kapasite`" ton="uyari" simge="kisiler" />
           </div>
 
-          <AppKart :govde-dolgusu="vm.etkinlik.value.kapakGorseli ? '0' : '20px'">
+          <AppKart :govde-dolgusu="vm.etkinlik.value.kapakGorseli && !resimHatasi ? '0' : '20px'">
             <img
-              v-if="vm.etkinlik.value.kapakGorseli"
-              :src="vm.etkinlik.value.kapakGorseli" alt="Etkinlik kapak görseli" class="kapak"
+              v-if="vm.etkinlik.value.kapakGorseli && !resimHatasi"
+              :src="vm.etkinlik.value.kapakGorseli"
+              alt="Etkinlik kapak görseli"
+              class="kapak"
+              @error="resimHatasi = true"
             />
-            <div :class="{ kapakli: vm.etkinlik.value.kapakGorseli }">
+            <div :class="{ kapakli: vm.etkinlik.value.kapakGorseli && !resimHatasi }">
               <h2 class="bolum-basligi">Açıklama</h2>
               <p class="aciklama">{{ vm.etkinlik.value.aciklama || 'Açıklama girilmemiş.' }}</p>
             </div>

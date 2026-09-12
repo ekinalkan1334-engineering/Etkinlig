@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import AppUstCubuk from '@/components/layout/AppUstCubuk.vue';
 import AppButton from '@/components/ui/AppButton.vue';
@@ -21,6 +21,35 @@ const router = useRouter();
 const tanimlar = useTanimlarStore();
 const oturum = useOturumStore();
 const vm = useEtkinlikListesi();
+
+const hataliResimler = ref(new Set());
+
+const sirketLogolari = {
+  'technobridge': '/etkinlig/admin/firma_gorselleri/technobridge.webp',
+  'papara': '/etkinlig/admin/firma_gorselleri/papara-logo.jpg',
+  'aselsan': '/etkinlig/admin/firma_gorselleri/aselsan.png',
+  'yıldız': '/etkinlig/admin/firma_gorselleri/yildiz_teknoloji.jpeg',
+  'yildiz': '/etkinlig/admin/firma_gorselleri/yildiz_teknoloji.jpeg',
+  'stm': '/etkinlig/admin/firma_gorselleri/stm.webp',
+  'trendyol': '/etkinlig/admin/firma_gorselleri/trendyol.jpeg',
+};
+
+function etkinlikGorseli(e) {
+  if (e.kapakGorseli && !hataliResimler.value.has(`kapak-${e.id}`)) {
+    return e.kapakGorseli;
+  }
+  const sirketAdi = (e.sirket?.ad || '').toLowerCase();
+  for (const [anahtar, logo] of Object.entries(sirketLogolari)) {
+    if (sirketAdi.includes(anahtar) && !hataliResimler.value.has(`logo-${e.id}`)) {
+      return logo;
+    }
+  }
+  return null;
+}
+
+function resimHatasi(e, tip) {
+  hataliResimler.value.add(`${tip}-${e.id}`);
+}
 
 onMounted(() => vm.yukle());
 
@@ -92,10 +121,26 @@ async function sil(e) {
           <tbody>
             <tr v-for="e in vm.kayitlar.value" :key="e.id">
               <td>
-                <RouterLink :to="{ name: 'etkinlik-detay', params: { id: e.id } }" class="hucre__baslik">
-                  {{ e.baslik }}
-                </RouterLink>
-                <span class="hucre__alt">{{ e.sirket.ad }} · {{ e.kod }}</span>
+                <div class="etkinlik-hucre">
+                  <div class="etkinlik-kucuk-resim-kutu">
+                    <img
+                      v-if="etkinlikGorseli(e)"
+                      :src="etkinlikGorseli(e)"
+                      :alt="e.baslik"
+                      class="etkinlik-kucuk-resim"
+                      @error="resimHatasi(e, e.kapakGorseli ? 'kapak' : 'logo')"
+                    />
+                    <div v-else class="etkinlik-kucuk-resim-yedek" :class="`tur--${e.tur}`">
+                      <AppIcon ad="takvim" :boyut="18" />
+                    </div>
+                  </div>
+                  <div class="etkinlik-hucre__bilgi">
+                    <RouterLink :to="{ name: 'etkinlik-detay', params: { id: e.id } }" class="hucre__baslik">
+                      {{ e.baslik }}
+                    </RouterLink>
+                    <span class="hucre__alt">{{ e.sirket.ad }} · {{ e.kod }}</span>
+                  </div>
+                </div>
               </td>
               <td><TurRozeti :tur="e.tur" /></td>
               <td class="notr">{{ e.sehir.ad }}</td>
@@ -177,5 +222,47 @@ async function sil(e) {
   border-radius: 6px;
   border: 1px dashed var(--line);
   white-space: nowrap;
+}
+
+.etkinlik-hucre {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.etkinlik-kucuk-resim-kutu {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface-2, #f5f3ef);
+  border: 1px solid var(--line, #ebe6df);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.etkinlik-kucuk-resim {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.etkinlik-kucuk-resim-yedek {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+  background: var(--paper-2);
+}
+.etkinlik-kucuk-resim-yedek.tur--konferans { background: #fdf4f4; color: #b93838; }
+.etkinlik-kucuk-resim-yedek.tur--sunum { background: #f0fdf4; color: #166534; }
+.etkinlik-kucuk-resim-yedek.tur--hackathon { background: #f5f3ff; color: #6b21a8; }
+.etkinlik-hucre__bilgi {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 </style>

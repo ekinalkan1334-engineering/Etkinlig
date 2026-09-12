@@ -356,7 +356,7 @@ if ($method === 'GET' && $uri === '/etkinlikler') {
     
     $sql = "
       SELECT e.id, e.kod, e.baslik, e.tur, e.durum, e.baslangic, e.bitis, e.son_basvuru,
-             e.kontenjan, e.basvuruya_acik, e.ilce, e.adres,
+             e.kontenjan, e.kapak_gorseli, e.basvuruya_acik, e.ilce, e.adres,
              s.id AS sirket_id, s.ad AS sirket_adi,
              c.id AS sehir_id,  c.ad AS sehir_adi,
              COALESCE(b.toplam, 0) AS basvuru_sayisi,
@@ -390,6 +390,7 @@ if ($method === 'GET' && $uri === '/etkinlikler') {
             'bitis' => $r['bitis'],
             'sonBasvuru' => $r['son_basvuru'],
             'kontenjan' => $kontenjan,
+            'kapakGorseli' => $r['kapak_gorseli'],
             'basvuruyaAcik' => (bool)$r['basvuruya_acik'],
             'sirket' => ['id' => (int)$r['sirket_id'], 'ad' => $r['sirket_adi']],
             'sehir' => ['id' => (int)$r['sehir_id'], 'ad' => $r['sehir_adi']],
@@ -497,9 +498,9 @@ if ($method === 'POST' && $uri === '/etkinlikler') {
     try {
         $stmt = $pdo->prepare("
           INSERT INTO etkinlikler (kod, baslik, aciklama, tur, sirket_id, iletisim_epostasi, sehir_id, ilce, adres,
-                                   baslangic, bitis, son_basvuru, kontenjan, sart_ogrenim_duzeyi, sart_min_ortalama,
+                                   baslangic, bitis, son_basvuru, kontenjan, kapak_gorseli, sart_ogrenim_duzeyi, sart_min_ortalama,
                                    sart_belge_zorunlu, durum, basvuruya_acik, otomatik_onay, yedek_liste, katilim_belgesi, olusturan_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $kod,
@@ -515,6 +516,7 @@ if ($method === 'POST' && $uri === '/etkinlikler') {
             $girdi['bitis'] ?: null,
             $girdi['sonBasvuru'] ?: null,
             (int)($girdi['kontenjan'] ?? 100),
+            $girdi['kapakGorseli'] ?? null,
             $girdi['sartOgrenimDuzeyi'] ?? 'lisans',
             $girdi['sartMinOrtalama'] !== null && $girdi['sartMinOrtalama'] !== '' ? (float)$girdi['sartMinOrtalama'] : null,
             !empty($girdi['sartBelgeZorunlu']) ? 1 : 0,
@@ -570,7 +572,7 @@ if ($method === 'PUT' && preg_match('#^/etkinlikler/(\d+)$#', $uri, $m)) {
         $stmt = $pdo->prepare("
           UPDATE etkinlikler SET
             baslik = ?, aciklama = ?, tur = ?, sirket_id = ?, iletisim_epostasi = ?, sehir_id = ?,
-            ilce = ?, adres = ?, baslangic = ?, bitis = ?, son_basvuru = ?, kontenjan = ?,
+            ilce = ?, adres = ?, baslangic = ?, bitis = ?, son_basvuru = ?, kontenjan = ?, kapak_gorseli = ?,
             sart_ogrenim_duzeyi = ?, sart_min_ortalama = ?, sart_belge_zorunlu = ?,
             durum = ?, basvuruya_acik = ?, otomatik_onay = ?, yedek_liste = ?, katilim_belgesi = ?
           WHERE id = ?
@@ -588,6 +590,7 @@ if ($method === 'PUT' && preg_match('#^/etkinlikler/(\d+)$#', $uri, $m)) {
             $girdi['bitis'] ?: null,
             $girdi['sonBasvuru'] ?: null,
             (int)($girdi['kontenjan'] ?? 100),
+            $girdi['kapakGorseli'] ?? null,
             $girdi['sartOgrenimDuzeyi'] ?? 'lisans',
             $girdi['sartMinOrtalama'] !== null && $girdi['sartMinOrtalama'] !== '' ? (float)$girdi['sartMinOrtalama'] : null,
             !empty($girdi['sartBelgeZorunlu']) ? 1 : 0,
@@ -916,8 +919,14 @@ if ($method === 'POST' && $uri === '/gorseller') {
         hataDondur(400, 'boyut_asimi', 'Görsel en fazla 5 MB olabilir');
     }
     
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime = $finfo->file($dosya['tmp_name']);
+    $mime = null;
+    if (class_exists('finfo')) {
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file($dosya['tmp_name']);
+    } elseif (function_exists('mime_content_type')) {
+        $mime = mime_content_type($dosya['tmp_name']);
+    }
+    
     $uzantilar = [
         'image/jpeg' => '.jpg',
         'image/pjpeg' => '.jpg',
@@ -926,30 +935,106 @@ if ($method === 'POST' && $uri === '/gorseller') {
         'image/gif'  => '.gif',
     ];
     
-    if (!isset($uzantilar[$mime])) {
-        hataDondur(400, 'gecersiz_tur', 'Yalnızca JPEG, PNG veya WEBP görseli yükleyebilirsiniz');
-    }
-    
-    $uzanti = $uzantilar[$mime];
-    // Dosyaları /etkinlig/yuklemeler klasörüne kaydet
-    $klasor = dirname(__DIR__) . '/yuklemeler';
-    if (!is_dir($klasor)) {
-        @mkdir($klasor, 0777, true);
+    $uzanti = $uzantilar[$mime] ?? null;
+    if (!$uzanti) {
+        $orijinalUzanti = strtolower(pathinfo((string)$dosya['name'], PATHINFO_EXTENSION));
+        if (in_array($orijinalUzanti, ['jpg', 'jpeg', 'png', 'webp'])) {
+            $uzanti = '.' . ($orijinalUzanti === 'jpeg' ? 'jpg' : $orijinalUzanti);
+            $mime = 'image/' . ($uzanti === '.jpg' ? 'jpeg' : substr($uzanti, 1));
+        } else {
+            hataDondur(400, 'gecersiz_tur', 'Yalnızca JPEG, PNG veya WEBP görseli yükleyebilirsiniz');
+        }
     }
     
     $dosyaAdi = date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . $uzanti;
-    $hedefYol = $klasor . '/' . $dosyaAdi;
     
-    if (!move_uploaded_file($dosya['tmp_name'], $hedefYol)) {
-        hataDondur(500, 'kayit_hatasi', 'Görsel sunucuya kaydedilemedi, lütfen klasör yazma izinlerini kontrol edin');
+    // Olası kayıt hedefleri (öncelik sırasına göre)
+    $adayKlasorler = [
+        [
+            'dizin' => __DIR__ . '/yuklemeler',
+            'url' => '/etkinlig/api/gorseller/' . $dosyaAdi
+        ],
+        [
+            'dizin' => dirname(__DIR__) . '/admin/firma_gorselleri',
+            'url' => '/etkinlig/admin/firma_gorselleri/' . $dosyaAdi
+        ],
+        [
+            'dizin' => dirname(__DIR__) . '/yuklemeler',
+            'url' => '/etkinlig/yuklemeler/' . $dosyaAdi
+        ],
+        [
+            'dizin' => sys_get_temp_dir() . '/etkinlig_yuklemeler',
+            'url' => '/etkinlig/api/gorseller/' . $dosyaAdi
+        ],
+    ];
+    
+    $kaydedildi = false;
+    $sonucUrl = '';
+    $denenenler = [];
+    
+    foreach ($adayKlasorler as $aday) {
+        $klasor = $aday['dizin'];
+        if (!is_dir($klasor)) {
+            @mkdir($klasor, 0777, true);
+        }
+        $hedef = $klasor . '/' . $dosyaAdi;
+        if (@copy($dosya['tmp_name'], $hedef) || @move_uploaded_file($dosya['tmp_name'], $hedef)) {
+            $kaydedildi = true;
+            $sonucUrl = $aday['url'];
+            break;
+        } else {
+            $denenenler[] = $klasor;
+        }
     }
     
-    $webYolu = '/etkinlig/yuklemeler/' . $dosyaAdi;
+    if (!$kaydedildi) {
+        hataDondur(500, 'kayit_hatasi', 'Görsel sunucuya kaydedilemedi', $denenenler);
+    }
+    
     basariDondur([
-        'yol' => $webYolu,
+        'yol' => $sonucUrl,
         'boyut' => $dosya['size'],
         'tip' => $mime,
     ], null, 201);
+}
+
+// 22. Görsel Sunma (GET /gorseller/{dosyaAdi})
+if ($method === 'GET' && preg_match('#^/gorseller/([^/]+)$#', $uri, $m)) {
+    $dosyaAdi = basename($m[1]);
+    $adayYollar = [
+        __DIR__ . '/yuklemeler/' . $dosyaAdi,
+        dirname(__DIR__) . '/admin/firma_gorselleri/' . $dosyaAdi,
+        dirname(__DIR__) . '/yuklemeler/' . $dosyaAdi,
+        sys_get_temp_dir() . '/etkinlig_yuklemeler/' . $dosyaAdi,
+    ];
+    
+    $bulundu = null;
+    foreach ($adayYollar as $yol) {
+        if (file_exists($yol)) {
+            $bulundu = $yol;
+            break;
+        }
+    }
+    
+    if (!$bulundu) {
+        hataDondur(404, 'bulunamadi', 'Görsel bulunamadı');
+    }
+    
+    $uzanti = strtolower(pathinfo($bulundu, PATHINFO_EXTENSION));
+    $tipler = [
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif'
+    ];
+    $tip = $tipler[$uzanti] ?? 'application/octet-stream';
+    
+    header('Content-Type: ' . $tip);
+    header('Content-Length: ' . filesize($bulundu));
+    header('Cache-Control: public, max-age=31536000');
+    readfile($bulundu);
+    exit;
 }
 
 // Hiçbir rotaya uymadıysa 404
