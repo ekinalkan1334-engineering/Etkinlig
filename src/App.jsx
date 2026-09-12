@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import './App.css'
+import logo from './logo.jpg';
 
 function App() {
   const [formData, setFormData] = useState({
@@ -39,32 +40,60 @@ function App() {
   };
 
   return (
-    <div className="container">
-      <div className="form-box">
-        <h2>EtkinLig'e Katıl</h2>
-        <form onSubmit={handleSubmit}>
-          
-          <div className="input-group">
-            <label>Ad Soyad</label>
-            <input type="text" name="adSoyad" placeholder="Örn: Enes Çalışkan" onChange={handleChange} required />
-          </div>
+    <div className="split-screen">
+      {/* SOL TARAF: Logo ve Tanıtım */}
+      <div className="left-side">
+        <img src={logo} alt="EtkinLig Logo" className="logo" />
+        <h1>EtkinLig'e Hoş Geldin!</h1>
+        <p>En heyecanlı etkinlikleri kaçırmamak, yerini hemen ayırtmak için kayıt ol.</p>
+      </div>
 
-          <div className="input-group">
-            <label>Üniversite E-posta</label>
-            <input type="email" name="email" placeholder="ogrencinumaran@student.beykent.edu.tr" onChange={handleChange} required />
-          </div>
+      {/* SAĞ TARAF: Kayıt Formu */}
+      <div className="right-side">
+        <div className="form-box">
+          <h2>Kayıt Ol</h2>
+          <form onSubmit={handleSubmit}>
+            <div className="input-group">
+              <label>Ad Soyad</label>
+              <input 
+                type="text" 
+                name="adSoyad" 
+                value={formData.adSoyad} 
+                onChange={handleChange} 
+                placeholder="Örn: Enes Çalışkan" 
+                required 
+              />
+            </div>
 
-          <div className="input-group">
-            <label>Şifre</label>
-            {/* type="password" özelliği şifrenin ekranda yıldız/nokta olarak görünmesini sağlar */}
-            <input type="password" name="sifre" placeholder="Güçlü bir şifre belirle" onChange={handleChange} required />
-          </div>
+            <div className="input-group">
+              <label>Üniversite E-posta</label>
+              <input 
+                type="email" 
+                name="email" 
+                value={formData.email} 
+                onChange={handleChange} 
+                placeholder="ogrencinumaran@student.beykent.edu.tr" 
+                required 
+              />
+            </div>
 
-          <button type="submit" className="btn">ETKİNLİGE Kayıt Ol</button>
-        </form>
+            <div className="input-group">
+              <label>Şifre</label>
+              <input 
+                type="password" 
+                name="sifre" 
+                value={formData.sifre} 
+                onChange={handleChange} 
+                placeholder="Güçlü bir şifre belirle" 
+                required 
+              />
+            </div>
+
+            <button type="submit" className="submit-btn">ETKİNLİĞE Kayıt Ol</button>
+          </form>
+        </div>
       </div>
     </div>
-  )
+  );
 }
-
 export default App
