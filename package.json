@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:setup": "npm --prefix admin-panel/server run db:setup",
+    "server:dev": "npm --prefix admin-panel/server run dev",
+    "admin:dev": "npm --prefix admin-panel/web run dev"
   },
   "dependencies": {
     "react": "^19.2.8",
