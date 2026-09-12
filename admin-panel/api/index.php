@@ -947,7 +947,7 @@ if ($method === 'GET' && $uri === '/basvurular') {
     $stmt = $pdo->prepare("
       SELECT b.id, b.durum, b.basvuru_tarihi, b.karar_tarihi, b.etkinlik_id,
              e.baslik AS etkinlik_basligi, e.sirket_id, s.ad AS sirket_adi,
-             o.id AS ogrenci_id, o.ad_soyad, o.sinif, o.ogrenim_duzeyi, o.not_ortalamasi,
+             o.id AS ogrenci_id, o.ad_soyad, o.eposta, o.universite, o.sinif, o.ogrenim_duzeyi, o.not_ortalamasi,
              bl.ad AS bolum_adi
       FROM basvurular b
       JOIN etkinlikler e ON e.id = b.etkinlik_id
@@ -972,6 +972,8 @@ if ($method === 'GET' && $uri === '/basvurular') {
             'ogrenci' => [
                 'id' => (int)$r['ogrenci_id'],
                 'adSoyad' => $r['ad_soyad'],
+                'eposta' => $r['eposta'] ?? null,
+                'universite' => $r['universite'] ?? null,
                 'bolum' => $r['bolum_adi'],
                 'sinif' => (int)$r['sinif'],
                 'ogrenimDuzeyi' => $r['ogrenim_duzeyi'],
@@ -1397,28 +1399,709 @@ if ($method === 'GET' && $uri === '/acik/filtreler') {
     ]);
 }
 
-// 26. Açık Vitrin - Öğrenci Kaydı (POST /acik/kayit veya POST /register)
+// ============================================================
+// ÖĞRENCİ TARAFI — kayıt, giriş, başvuru, yorumlar
+// (Yönetici oturumundan tamamen ayrı: farklı çerez, farklı jeton tipi.)
+// ============================================================
+
+const OGRENCI_CEREZ = 'etkinlig_ogrenci_oturum';
+
+/** Şema uyumluluğu: eksik sütun ve tabloları sessizce tamamla. */
+(function (PDO $pdo): void {
+    try {
+        $var = $pdo->query("SHOW COLUMNS FROM ogrenciler LIKE 'parola_hash'")->fetch();
+        if (!$var) $pdo->exec("ALTER TABLE ogrenciler ADD COLUMN parola_hash VARCHAR(255) NULL");
+    } catch (Throwable $e) {}
+    try {
+        $var = $pdo->query("SHOW COLUMNS FROM ogrenciler LIKE 'aktif'")->fetch();
+        if (!$var) $pdo->exec("ALTER TABLE ogrenciler ADD COLUMN aktif TINYINT(1) NOT NULL DEFAULT 1");
+    } catch (Throwable $e) {}
+    try {
+        $var = $pdo->query("SHOW COLUMNS FROM ogrenciler LIKE 'son_giris'")->fetch();
+        if (!$var) $pdo->exec("ALTER TABLE ogrenciler ADD COLUMN son_giris DATETIME NULL");
+    } catch (Throwable $e) {}
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS yorumlar (
+              id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              etkinlik_id  INT UNSIGNED NOT NULL,
+              ogrenci_id   INT UNSIGNED NOT NULL,
+              metin        VARCHAR(1000) NOT NULL,
+              olusturuldu  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (id),
+              KEY ix_yorum_etkinlik (etkinlik_id, olusturuldu)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci
+        ");
+    } catch (Throwable $e) {}
+    // Aynı öğrenci aynı etkinliğe iki kez başvuramasın — kilit veritabanında.
+    try {
+        $idx = $pdo->query("SHOW INDEX FROM basvurular WHERE Key_name = 'uq_basvuru'")->fetch();
+        if (!$idx) $pdo->exec("ALTER TABLE basvurular ADD UNIQUE KEY uq_basvuru (etkinlik_id, ogrenci_id)");
+    } catch (Throwable $e) {}
+})($pdo);
+
+/** Profil için eklenen sütunlar. */
+(function (PDO $pdo): void {
+    $sutunlar = [
+        'telefon'     => "ALTER TABLE ogrenciler ADD COLUMN telefon VARCHAR(32) NULL",
+        'profil_foto' => "ALTER TABLE ogrenciler ADD COLUMN profil_foto VARCHAR(300) NULL",
+        'cv_yolu'     => "ALTER TABLE ogrenciler ADD COLUMN cv_yolu VARCHAR(300) NULL",
+        'cv_ad'       => "ALTER TABLE ogrenciler ADD COLUMN cv_ad VARCHAR(200) NULL",
+    ];
+    foreach ($sutunlar as $ad => $sql) {
+        try {
+            if (!$pdo->query("SHOW COLUMNS FROM ogrenciler LIKE '$ad'")->fetch()) $pdo->exec($sql);
+        } catch (Throwable $e) {}
+    }
+})($pdo);
+
+function ogrenciCevir(array $r): array {
+    return [
+        'id' => (int)$r['id'],
+        'adSoyad' => $r['ad_soyad'],
+        'eposta' => $r['eposta'],
+        'universite' => $r['universite'] ?? null,
+        'bolumId' => isset($r['bolum_id']) && $r['bolum_id'] !== null ? (int)$r['bolum_id'] : null,
+        'ogrenimDuzeyi' => $r['ogrenim_duzeyi'] ?? null,
+        'sinif' => isset($r['sinif']) ? (int)$r['sinif'] : null,
+    ];
+}
+
+function ogrenciJetonUret(int $id): string {
+    $payload = ['sub' => $id, 'tip' => 'ogrenci', 'exp' => time() + (30 * 24 * 3600)];
+    $h = b64UrlEncode((string)json_encode(['alg' => 'HS256', 'typ' => 'JWT']));
+    $b = b64UrlEncode((string)json_encode($payload));
+    $s = b64UrlEncode(hash_hmac('sha256', "$h.$b", JWT_SECRET, true));
+    return "$h.$b.$s";
+}
+
+function ogrenciCerezYaz(string $jeton): void {
+    setcookie(OGRENCI_CEREZ, $jeton, [
+        'expires' => time() + (30 * 24 * 3600),
+        'path' => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure' => (($_SERVER['HTTPS'] ?? '') === 'on'),
+    ]);
+}
+
+function istekOgrencisi(PDO $pdo): ?array {
+    $jeton = $_COOKIE[OGRENCI_CEREZ] ?? null;
+    if (!$jeton) {
+        $auth = $_SERVER['HTTP_X_OGRENCI_TOKEN'] ?? null;
+        if (!$auth && function_exists('apache_request_headers')) {
+            $h = apache_request_headers();
+            $auth = $h['X-Ogrenci-Token'] ?? $h['x-ogrenci-token'] ?? null;
+        }
+        $jeton = $auth;
+    }
+    $veri = jwtCoz($jeton);
+    // Yönetici jetonu öğrenci yerine geçemez.
+    if (!$veri || ($veri['tip'] ?? null) !== 'ogrenci') return null;
+
+    $stmt = $pdo->prepare('SELECT id, ad_soyad, eposta, universite, bolum_id, ogrenim_duzeyi, sinif, aktif
+                           FROM ogrenciler WHERE id = ?');
+    $stmt->execute([(int)$veri['sub']]);
+    $o = $stmt->fetch();
+    if (!$o || (isset($o['aktif']) && !(int)$o['aktif'])) return null;
+    return ogrenciCevir($o);
+}
+
+function ogrenciGirisZorunlu(PDO $pdo): array {
+    $o = istekOgrencisi($pdo);
+    if (!$o) hataDondur(401, 'kimlik_hatasi', 'Bu işlem için giriş yapmalısınız');
+    return $o;
+}
+
+function parolaGecerliMi(string $p): bool {
+    return mb_strlen($p) >= 8
+        && preg_match('/[a-zçğıöşü]/u', $p)
+        && preg_match('/[A-ZÇĞİÖŞÜ]/u', $p)
+        && preg_match('/\d/', $p);
+}
+
+// --- Öğrenci kaydı ---
 if ($method === 'POST' && ($uri === '/acik/kayit' || $uri === '/register')) {
     $adSoyad = trim((string)($girdi['adSoyad'] ?? ''));
-    $eposta = trim((string)($girdi['email'] ?? $girdi['eposta'] ?? ''));
-    $sifre = (string)($girdi['sifre'] ?? $girdi['parola'] ?? '');
-    
-    if (!$adSoyad || !$eposta) {
-        hataDondur(400, 'eksik_alan', 'Ad soyad ve e-posta zorunludur');
+    $eposta  = mb_strtolower(trim((string)($girdi['email'] ?? $girdi['eposta'] ?? '')));
+    $parola  = (string)($girdi['sifre'] ?? $girdi['parola'] ?? '');
+    $universite = trim((string)($girdi['universite'] ?? '')) ?: null;
+
+    if (mb_strlen($adSoyad) < 3) hataDondur(400, 'gecersiz_istek', 'Ad soyad en az 3 karakter olmalı');
+    if (!filter_var($eposta, FILTER_VALIDATE_EMAIL)) hataDondur(400, 'gecersiz_istek', 'Geçerli bir e-posta girin');
+    if (!parolaGecerliMi($parola)) {
+        hataDondur(400, 'gecersiz_istek', 'Parola en az 8 karakter olmalı; bir büyük harf, bir küçük harf ve bir rakam içermeli');
     }
-    
-    $stmtKontrol = $pdo->prepare('SELECT id FROM ogrenciler WHERE eposta = ?');
-    $stmtKontrol->execute([$eposta]);
-    $mevcutId = $stmtKontrol->fetchColumn();
-    
-    if ($mevcutId) {
-        basariDondur(['id' => (int)$mevcutId, 'adSoyad' => $adSoyad, 'eposta' => $eposta, 'mesaj' => 'Giriş başarılı']);
+
+    $stmt = $pdo->prepare('SELECT id, parola_hash FROM ogrenciler WHERE eposta = ?');
+    $stmt->execute([$eposta]);
+    $mevcut = $stmt->fetch();
+
+    if ($mevcut && !empty($mevcut['parola_hash'])) {
+        hataDondur(409, 'cakisma', 'Bu e-posta ile bir hesap zaten var. Giriş yapın.');
+    }
+
+    $hash = password_hash($parola, PASSWORD_BCRYPT, ['cost' => 10]);
+    if ($mevcut) {
+        // Yönetici tarafından eklenmiş, henüz parolası olmayan kayda hesap bağla.
+        $pdo->prepare('UPDATE ogrenciler SET ad_soyad = ?, parola_hash = ?, universite = COALESCE(?, universite) WHERE id = ?')
+            ->execute([$adSoyad, $hash, $universite, (int)$mevcut['id']]);
+        $id = (int)$mevcut['id'];
     } else {
-        $stmt = $pdo->prepare('INSERT INTO ogrenciler (ad_soyad, eposta) VALUES (?, ?)');
-        $stmt->execute([$adSoyad, $eposta]);
-        $yeniId = (int)$pdo->lastInsertId();
-        basariDondur(['id' => $yeniId, 'adSoyad' => $adSoyad, 'eposta' => $eposta, 'mesaj' => 'Kayıt başarılı'], null, 201);
+        $pdo->prepare('INSERT INTO ogrenciler (ad_soyad, eposta, parola_hash, universite) VALUES (?, ?, ?, ?)')
+            ->execute([$adSoyad, $eposta, $hash, $universite]);
+        $id = (int)$pdo->lastInsertId();
     }
+
+    $jeton = ogrenciJetonUret($id);
+    ogrenciCerezYaz($jeton);
+    $s = $pdo->prepare('SELECT id, ad_soyad, eposta, universite, bolum_id, ogrenim_duzeyi, sinif FROM ogrenciler WHERE id = ?');
+    $s->execute([$id]);
+    basariDondur(['ogrenci' => ogrenciCevir($s->fetch()), 'jeton' => $jeton], null, 201);
+}
+
+// --- Öğrenci girişi ---
+if ($method === 'POST' && $uri === '/acik/giris') {
+    $eposta = mb_strtolower(trim((string)($girdi['email'] ?? $girdi['eposta'] ?? '')));
+    $parola = (string)($girdi['sifre'] ?? $girdi['parola'] ?? '');
+
+    $stmt = $pdo->prepare('SELECT id, ad_soyad, eposta, parola_hash, universite, bolum_id, ogrenim_duzeyi, sinif, aktif
+                           FROM ogrenciler WHERE eposta = ?');
+    $stmt->execute([$eposta]);
+    $o = $stmt->fetch();
+
+    // Hesap yoksa da karşılaştırma yapılır: yanıt süresi e-postanın kayıtlı olup
+    // olmadığını ele vermesin.
+    $hash = $o['parola_hash'] ?? '$2y$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidin';
+    $uyuyor = password_verify($parola, $hash);
+
+    if (!$o || empty($o['parola_hash']) || !$uyuyor) {
+        hataDondur(401, 'kimlik_hatasi', 'E-posta veya parola hatalı');
+    }
+    if (isset($o['aktif']) && !(int)$o['aktif']) {
+        hataDondur(403, 'hesap_pasif', 'Bu hesap devre dışı bırakılmış');
+    }
+
+    try { $pdo->prepare('UPDATE ogrenciler SET son_giris = NOW() WHERE id = ?')->execute([(int)$o['id']]); } catch (Throwable $e) {}
+
+    $jeton = ogrenciJetonUret((int)$o['id']);
+    ogrenciCerezYaz($jeton);
+    basariDondur(['ogrenci' => ogrenciCevir($o), 'jeton' => $jeton]);
+}
+
+// --- Oturumdaki öğrenci ---
+if ($method === 'GET' && $uri === '/acik/ben') {
+    $o = istekOgrencisi($pdo);
+    if (!$o) hataDondur(401, 'kimlik_hatasi', 'Oturum yok');
+    basariDondur($o);
+}
+
+// --- Çıkış ---
+if ($method === 'POST' && $uri === '/acik/cikis') {
+    setcookie(OGRENCI_CEREZ, '', ['expires' => time() - 3600, 'path' => '/']);
+    http_response_code(204);
+    exit;
+}
+
+// --- Etkinliğe başvur ---
+if ($method === 'POST' && preg_match('#^/acik/etkinlikler/(\d+)/basvuru$#', $uri, $m)) {
+    $o = ogrenciGirisZorunlu($pdo);
+    $etkinlikId = (int)$m[1];
+
+    $stmt = $pdo->prepare("
+        SELECT e.id, e.baslik, e.kontenjan, e.basvuruya_acik, e.son_basvuru, e.yedek_liste, e.otomatik_onay,
+               COALESCE(SUM(b.durum = 'onaylandi'), 0) AS onayli
+        FROM etkinlikler e
+        LEFT JOIN basvurular b ON b.etkinlik_id = e.id
+        WHERE e.id = ? AND e.durum = 'yayinda'
+        GROUP BY e.id
+    ");
+    $stmt->execute([$etkinlikId]);
+    $e = $stmt->fetch();
+    if (!$e) hataDondur(404, 'bulunamadi', 'Etkinlik bulunamadı');
+
+    if (!(int)$e['basvuruya_acik']) hataDondur(409, 'cakisma', 'Bu etkinlik başvurulara kapalı');
+    if (!empty($e['son_basvuru']) && $e['son_basvuru'] < date('Y-m-d')) {
+        hataDondur(409, 'cakisma', 'Son başvuru tarihi geçmiş');
+    }
+
+    // Zaten başvurmuş mu? Kilit veritabanında da var; burada anlaşılır mesaj veriyoruz.
+    $v = $pdo->prepare('SELECT id, durum FROM basvurular WHERE etkinlik_id = ? AND ogrenci_id = ?');
+    $v->execute([$etkinlikId, $o['id']]);
+    if ($eski = $v->fetch()) {
+        hataDondur(409, 'zaten_basvurdu', 'Bu etkinliğe zaten başvurdunuz', ['durum' => $eski['durum']]);
+    }
+
+    // --- Ön katılım şartları: profildeki bilgilerle karşılaştırılır ---
+    $sart = $pdo->prepare('SELECT sart_ogrenim_duzeyi, sart_min_ortalama FROM etkinlikler WHERE id = ?');
+    $sart->execute([$etkinlikId]);
+    $sartlar = $sart->fetch() ?: [];
+
+    $sinifSorgu = $pdo->prepare('SELECT sinif FROM etkinlik_siniflari WHERE etkinlik_id = ?');
+    $sinifSorgu->execute([$etkinlikId]);
+    $izinliSiniflar = array_map('intval', $sinifSorgu->fetchAll(PDO::FETCH_COLUMN));
+
+    $bolumSorgu = $pdo->prepare('SELECT bolum_id FROM etkinlik_bolumleri WHERE etkinlik_id = ?');
+    $bolumSorgu->execute([$etkinlikId]);
+    $izinliBolumler = array_map('intval', $bolumSorgu->fetchAll(PDO::FETCH_COLUMN));
+
+    $profil = profilOku($pdo, $o['id']);
+
+    // Şart konmuşsa ilgili profil alanı dolu olmalı; boşsa başvuru gönderilmez.
+    $gerekli = [];
+    if ($sartlar['sart_min_ortalama'] !== null && $profil['gano'] === null) $gerekli[] = 'not ortalaması';
+    if ($izinliSiniflar && $profil['sinif'] === null) $gerekli[] = 'sınıf';
+    if ($izinliBolumler && !$profil['bolumId']) $gerekli[] = 'bölüm';
+    if (!empty($sartlar['sart_ogrenim_duzeyi']) && !$profil['ogrenimDuzeyi']) $gerekli[] = 'öğrenim düzeyi';
+    if ($gerekli) {
+        hataDondur(422, 'profil_eksik',
+            'Bu etkinliğe başvurmak için profilinizde ' . implode(', ', $gerekli) . ' bilgisi dolu olmalı.',
+            ['eksikler' => $gerekli]);
+    }
+
+    $uymayan = [];
+    if ($sartlar['sart_min_ortalama'] !== null && $profil['gano'] < (float)$sartlar['sart_min_ortalama']) {
+        $uymayan[] = sprintf('Asgari not ortalaması %.2f, sizinki %.2f', (float)$sartlar['sart_min_ortalama'], $profil['gano']);
+    }
+    if ($izinliSiniflar && !in_array($profil['sinif'], $izinliSiniflar, true)) {
+        $uymayan[] = 'Etkinlik yalnızca belirli sınıflara açık';
+    }
+    if ($izinliBolumler && !in_array($profil['bolumId'], $izinliBolumler, true)) {
+        $uymayan[] = 'Etkinlik yalnızca belirli bölümlere açık';
+    }
+    if (!empty($sartlar['sart_ogrenim_duzeyi']) && $profil['ogrenimDuzeyi'] !== $sartlar['sart_ogrenim_duzeyi']) {
+        $uymayan[] = 'Etkinlik farklı bir öğrenim düzeyi için açılmış';
+    }
+    if ($uymayan) {
+        hataDondur(422, 'sart_saglanmiyor',
+            'Ön katılım şartlarını sağlamadığınız için başvuru gönderilemedi.',
+            ['nedenler' => $uymayan]);
+    }
+
+    $dolu = (int)$e['onayli'] >= (int)$e['kontenjan'];
+    if ($dolu && !(int)$e['yedek_liste']) hataDondur(409, 'cakisma', 'Kontenjan doldu');
+
+    $durum = $dolu ? 'yedek' : ((int)$e['otomatik_onay'] ? 'onaylandi' : 'beklemede');
+
+    try {
+        $pdo->prepare('INSERT INTO basvurular (etkinlik_id, ogrenci_id, durum, karar_tarihi) VALUES (?, ?, ?, ?)')
+            ->execute([$etkinlikId, $o['id'], $durum, $durum === 'onaylandi' ? date('Y-m-d H:i:s') : null]);
+    } catch (PDOException $ex) {
+        // Yarış durumu: iki istek aynı anda geldiyse UNIQUE kısıt yakalar.
+        if ($ex->getCode() === '23000') hataDondur(409, 'zaten_basvurdu', 'Bu etkinliğe zaten başvurdunuz');
+        throw $ex;
+    }
+
+    basariDondur([
+        'id' => (int)$pdo->lastInsertId(),
+        'etkinlikId' => $etkinlikId,
+        'durum' => $durum,
+        'mesaj' => $durum === 'yedek'
+            ? 'Kontenjan dolu olduğu için yedek listeye alındınız.'
+            : ($durum === 'onaylandi' ? 'Başvurunuz onaylandı.' : 'Başvurunuz alındı, onay bekliyor.'),
+    ], null, 201);
+}
+
+// --- Başvurularım ---
+if ($method === 'GET' && $uri === '/acik/basvurularim') {
+    $o = ogrenciGirisZorunlu($pdo);
+    $stmt = $pdo->prepare("
+        SELECT b.id, b.durum, b.basvuru_tarihi, b.karar_tarihi,
+               e.id AS etkinlik_id, e.kod, e.baslik, e.tur, e.baslangic, e.bitis,
+               e.kapak_gorseli, e.adres, e.ilce,
+               s.ad AS sirket_adi, c.ad AS sehir_adi
+        FROM basvurular b
+        JOIN etkinlikler e ON e.id = b.etkinlik_id
+        JOIN sirketler s ON s.id = e.sirket_id
+        JOIN sehirler  c ON c.id = e.sehir_id
+        WHERE b.ogrenci_id = ?
+        ORDER BY b.basvuru_tarihi DESC
+    ");
+    $stmt->execute([$o['id']]);
+    $satirlar = array_map(function ($r) {
+        return [
+            'id' => (int)$r['id'],
+            'durum' => $r['durum'],
+            'basvuruTarihi' => $r['basvuru_tarihi'],
+            'kararTarihi' => $r['karar_tarihi'],
+            'etkinlik' => [
+                'id' => (int)$r['etkinlik_id'],
+                'kod' => $r['kod'],
+                'baslik' => $r['baslik'],
+                'tur' => $r['tur'],
+                'baslangic' => $r['baslangic'],
+                'bitis' => $r['bitis'],
+                'gorsel' => $r['kapak_gorseli'],
+                'sirket' => $r['sirket_adi'],
+                'sehir' => $r['sehir_adi'],
+                'ilce' => $r['ilce'],
+                'adres' => $r['adres'],
+            ],
+        ];
+    }, $stmt->fetchAll());
+    basariDondur($satirlar);
+}
+
+// --- Yorumlar: listele (herkese açık) ---
+if ($method === 'GET' && preg_match('#^/acik/etkinlikler/(\d+)/yorumlar$#', $uri, $m)) {
+    $etkinlikId = (int)$m[1];
+    $ben = istekOgrencisi($pdo);
+    $stmt = $pdo->prepare("
+        SELECT y.id, y.metin, y.olusturuldu, y.ogrenci_id,
+               o.ad_soyad, o.universite, bl.ad AS bolum_adi
+        FROM yorumlar y
+        JOIN ogrenciler o ON o.id = y.ogrenci_id
+        LEFT JOIN bolumler bl ON bl.id = o.bolum_id
+        WHERE y.etkinlik_id = ?
+        ORDER BY y.olusturuldu DESC
+        LIMIT 200
+    ");
+    $stmt->execute([$etkinlikId]);
+    $liste = array_map(function ($r) use ($ben) {
+        return [
+            'id' => (int)$r['id'],
+            'metin' => $r['metin'],
+            'olusturuldu' => $r['olusturuldu'],
+            'yazar' => [
+                'adSoyad' => $r['ad_soyad'],
+                'universite' => $r['universite'],
+                'bolum' => $r['bolum_adi'],
+            ],
+            'benim' => $ben !== null && (int)$r['ogrenci_id'] === $ben['id'],
+        ];
+    }, $stmt->fetchAll());
+    basariDondur($liste);
+}
+
+// --- Yorumlar: ekle (giriş gerekli) ---
+if ($method === 'POST' && preg_match('#^/acik/etkinlikler/(\d+)/yorumlar$#', $uri, $m)) {
+    $o = ogrenciGirisZorunlu($pdo);
+    $etkinlikId = (int)$m[1];
+    $metin = trim((string)($girdi['metin'] ?? ''));
+
+    if (mb_strlen($metin) < 2) hataDondur(400, 'gecersiz_istek', 'Yorum en az 2 karakter olmalı');
+    if (mb_strlen($metin) > 1000) hataDondur(400, 'gecersiz_istek', 'Yorum en fazla 1000 karakter olabilir');
+
+    $v = $pdo->prepare("SELECT id FROM etkinlikler WHERE id = ? AND durum = 'yayinda'");
+    $v->execute([$etkinlikId]);
+    if (!$v->fetch()) hataDondur(404, 'bulunamadi', 'Etkinlik bulunamadı');
+
+    // Aynı metni arka arkaya göndermeyi engelle (çift tıklama / yenileme).
+    $son = $pdo->prepare('SELECT metin FROM yorumlar WHERE etkinlik_id = ? AND ogrenci_id = ? ORDER BY id DESC LIMIT 1');
+    $son->execute([$etkinlikId, $o['id']]);
+    if (($son->fetchColumn() ?: null) === $metin) {
+        hataDondur(409, 'cakisma', 'Aynı yorumu az önce gönderdiniz');
+    }
+
+    $pdo->prepare('INSERT INTO yorumlar (etkinlik_id, ogrenci_id, metin) VALUES (?, ?, ?)')
+        ->execute([$etkinlikId, $o['id'], $metin]);
+    $id = (int)$pdo->lastInsertId();
+
+    $s = $pdo->prepare("
+        SELECT y.id, y.metin, y.olusturuldu, o.ad_soyad, o.universite, bl.ad AS bolum_adi
+        FROM yorumlar y JOIN ogrenciler o ON o.id = y.ogrenci_id
+        LEFT JOIN bolumler bl ON bl.id = o.bolum_id WHERE y.id = ?
+    ");
+    $s->execute([$id]);
+    $r = $s->fetch();
+    basariDondur([
+        'id' => (int)$r['id'],
+        'metin' => $r['metin'],
+        'olusturuldu' => $r['olusturuldu'],
+        'yazar' => ['adSoyad' => $r['ad_soyad'], 'universite' => $r['universite'], 'bolum' => $r['bolum_adi']],
+        'benim' => true,
+    ], null, 201);
+}
+
+// --- Yorumlar: sil (kendi yorumu veya yönetici) ---
+if ($method === 'DELETE' && preg_match('#^/acik/yorumlar/(\d+)$#', $uri, $m)) {
+    $yorumId = (int)$m[1];
+    $s = $pdo->prepare('SELECT ogrenci_id FROM yorumlar WHERE id = ?');
+    $s->execute([$yorumId]);
+    $sahip = $s->fetchColumn();
+    if ($sahip === false) hataDondur(404, 'bulunamadi', 'Yorum bulunamadı');
+
+    $ben = istekOgrencisi($pdo);
+    $yonetici = istekKullanicisi($pdo);
+    if (!($ben && (int)$sahip === $ben['id']) && !$yonetici) {
+        hataDondur(403, 'yetki_yok', 'Bu yorumu silemezsiniz');
+    }
+
+    $pdo->prepare('DELETE FROM yorumlar WHERE id = ?')->execute([$yorumId]);
+    http_response_code(204);
+    exit;
+}
+
+// ============================================================
+// ÖĞRENCİ PROFİLİ — bilgiler, fotoğraf, CV; başvuruda şart denetimi
+// ============================================================
+
+const YUKLEME_DIZINI = __DIR__ . '/yuklemeler';
+
+function profilCevir(array $r): array {
+    return [
+        'id' => (int)$r['id'],
+        'adSoyad' => $r['ad_soyad'],
+        'eposta' => $r['eposta'],
+        'telefon' => $r['telefon'] ?? null,
+        'universite' => $r['universite'] ?? null,
+        'bolumId' => isset($r['bolum_id']) && $r['bolum_id'] !== null ? (int)$r['bolum_id'] : null,
+        'bolum' => $r['bolum_adi'] ?? null,
+        'ogrenimDuzeyi' => $r['ogrenim_duzeyi'] ?? null,
+        'sinif' => isset($r['sinif']) ? (int)$r['sinif'] : null,
+        'ogrenciNo' => $r['ogrenci_no'] ?? null,
+        'gano' => isset($r['not_ortalamasi']) && $r['not_ortalamasi'] !== null ? (float)$r['not_ortalamasi'] : null,
+        'foto' => $r['profil_foto'] ?? null,
+        'cv' => empty($r['cv_yolu']) ? null : ['yol' => $r['cv_yolu'], 'ad' => $r['cv_ad'] ?? 'cv.pdf'],
+    ];
+}
+
+function profilOku(PDO $pdo, int $id): ?array {
+    $stmt = $pdo->prepare('
+        SELECT o.*, b.ad AS bolum_adi
+        FROM ogrenciler o LEFT JOIN bolumler b ON b.id = o.bolum_id
+        WHERE o.id = ?
+    ');
+    $stmt->execute([$id]);
+    $r = $stmt->fetch();
+    return $r ? profilCevir($r) : null;
+}
+
+/** Profilin başvuru için yeterince dolu olup olmadığı. */
+function profilEksikleri(array $p): array {
+    $eksik = [];
+    if (!$p['universite']) $eksik[] = 'üniversite';
+    if (!$p['bolumId']) $eksik[] = 'bölüm';
+    if ($p['sinif'] === null) $eksik[] = 'sınıf';
+    if ($p['gano'] === null) $eksik[] = 'not ortalaması';
+    return $eksik;
+}
+
+/** Tek dosya yükleme yardımcısı: tür ve boyut denetimi, güvenli ad. */
+function dosyaYukle(array $dosya, array $izinliMime, int $enFazlaBayt, string $onek): array {
+    if (($dosya['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        $kod = $dosya['error'] ?? UPLOAD_ERR_NO_FILE;
+        $mesaj = ($kod === UPLOAD_ERR_INI_SIZE || $kod === UPLOAD_ERR_FORM_SIZE)
+            ? 'Dosya çok büyük' : 'Dosya yüklenemedi';
+        hataDondur(400, 'gecersiz_dosya', $mesaj);
+    }
+    if ($dosya['size'] > $enFazlaBayt) {
+        hataDondur(400, 'boyut_asimi', 'Dosya en fazla ' . round($enFazlaBayt / 1048576) . ' MB olabilir');
+    }
+
+    $mime = null;
+    if (class_exists('finfo')) {
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file($dosya['tmp_name']);
+    } elseif (function_exists('mime_content_type')) {
+        $mime = mime_content_type($dosya['tmp_name']);
+    }
+    $uzanti = $izinliMime[$mime] ?? null;
+    if (!$uzanti) {
+        hataDondur(400, 'gecersiz_tur', 'Bu dosya türü kabul edilmiyor');
+    }
+
+    // Ad istemciden alınmaz: yol kaçışı ve çalıştırılabilir uzantı riski kalmasın.
+    $ad = $onek . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . $uzanti;
+    if (!is_dir(YUKLEME_DIZINI)) @mkdir(YUKLEME_DIZINI, 0775, true);
+    if (!@move_uploaded_file($dosya['tmp_name'], YUKLEME_DIZINI . '/' . $ad)) {
+        hataDondur(500, 'kaydedilemedi', 'Dosya sunucuya kaydedilemedi');
+    }
+    return ['ad' => $ad, 'mime' => $mime];
+}
+
+// --- Profili oku ---
+if ($method === 'GET' && $uri === '/acik/profil') {
+    $o = ogrenciGirisZorunlu($pdo);
+    $p = profilOku($pdo, $o['id']);
+    basariDondur(['profil' => $p, 'eksikler' => profilEksikleri($p)]);
+}
+
+// --- Profili güncelle ---
+if ($method === 'PUT' && $uri === '/acik/profil') {
+    $o = ogrenciGirisZorunlu($pdo);
+
+    $adSoyad = trim((string)($girdi['adSoyad'] ?? ''));
+    if (mb_strlen($adSoyad) < 3) hataDondur(400, 'gecersiz_istek', 'Ad soyad en az 3 karakter olmalı');
+
+    $telefon = trim((string)($girdi['telefon'] ?? ''));
+    if ($telefon !== '' && !preg_match('/^[0-9 ()+\-]{10,20}$/', $telefon)) {
+        hataDondur(400, 'gecersiz_istek', 'Telefon numarası geçersiz');
+    }
+
+    $gano = $girdi['gano'] ?? null;
+    if ($gano !== null && $gano !== '') {
+        $gano = (float)$gano;
+        if ($gano < 0 || $gano > 4) hataDondur(400, 'gecersiz_istek', 'Not ortalaması 0 ile 4 arasında olmalı');
+    } else {
+        $gano = null;
+    }
+
+    $sinif = $girdi['sinif'] ?? null;
+    if ($sinif !== null && $sinif !== '') {
+        $sinif = (int)$sinif;
+        if ($sinif < 0 || $sinif > 5) hataDondur(400, 'gecersiz_istek', 'Sınıf geçersiz');
+    } else {
+        $sinif = null;
+    }
+
+    $duzey = $girdi['ogrenimDuzeyi'] ?? null;
+    if ($duzey !== null && $duzey !== '' && !in_array($duzey, ['on_lisans','lisans','yuksek_lisans','doktora'], true)) {
+        hataDondur(400, 'gecersiz_istek', 'Öğrenim düzeyi geçersiz');
+    }
+
+    $bolumId = $girdi['bolumId'] ?? null;
+    $bolumId = ($bolumId === null || $bolumId === '') ? null : (int)$bolumId;
+    if ($bolumId !== null) {
+        $v = $pdo->prepare('SELECT id FROM bolumler WHERE id = ?');
+        $v->execute([$bolumId]);
+        if (!$v->fetch()) hataDondur(400, 'gecersiz_istek', 'Bölüm bulunamadı');
+    }
+
+    $pdo->prepare('
+        UPDATE ogrenciler
+        SET ad_soyad = ?, telefon = ?, universite = ?, bolum_id = ?,
+            ogrenim_duzeyi = COALESCE(?, ogrenim_duzeyi), sinif = ?, ogrenci_no = ?, not_ortalamasi = ?
+        WHERE id = ?
+    ')->execute([
+        $adSoyad,
+        $telefon !== '' ? $telefon : null,
+        trim((string)($girdi['universite'] ?? '')) ?: null,
+        $bolumId,
+        ($duzey === '' ? null : $duzey),
+        $sinif,
+        trim((string)($girdi['ogrenciNo'] ?? '')) ?: null,
+        $gano,
+        $o['id'],
+    ]);
+
+    $p = profilOku($pdo, $o['id']);
+    basariDondur(['profil' => $p, 'eksikler' => profilEksikleri($p)]);
+}
+
+// --- Profil fotoğrafı ---
+if ($method === 'POST' && $uri === '/acik/profil/foto') {
+    $o = ogrenciGirisZorunlu($pdo);
+    $sonuc = dosyaYukle(
+        $_FILES['foto'] ?? [],
+        ['image/jpeg' => '.jpg', 'image/pjpeg' => '.jpg', 'image/png' => '.png', 'image/webp' => '.webp'],
+        3 * 1024 * 1024,
+        'foto'
+    );
+    $url = '/etkinlig/api/gorseller/' . $sonuc['ad'];
+    $pdo->prepare('UPDATE ogrenciler SET profil_foto = ? WHERE id = ?')->execute([$url, $o['id']]);
+    basariDondur(['foto' => $url], null, 201);
+}
+
+// --- CV ---
+if ($method === 'POST' && $uri === '/acik/profil/cv') {
+    $o = ogrenciGirisZorunlu($pdo);
+    $orijinal = (string)($_FILES['cv']['name'] ?? 'cv.pdf');
+    $sonuc = dosyaYukle($_FILES['cv'] ?? [], ['application/pdf' => '.pdf'], 5 * 1024 * 1024, 'cv');
+    // Görüntülenecek ad kullanıcıdan gelir ama diskteki ad değil; XSS'e karşı temizlenir.
+    $gosterilenAd = mb_substr(preg_replace('/[^\p{L}\p{N} ._-]/u', '', $orijinal) ?: 'cv.pdf', 0, 120);
+    $pdo->prepare('UPDATE ogrenciler SET cv_yolu = ?, cv_ad = ? WHERE id = ?')
+        ->execute([$sonuc['ad'], $gosterilenAd, $o['id']]);
+    basariDondur(['cv' => ['yol' => $sonuc['ad'], 'ad' => $gosterilenAd]], null, 201);
+}
+
+// --- CV indir: yalnızca sahibi veya bir yönetici ---
+if ($method === 'GET' && preg_match('#^/cv/([A-Za-z0-9._-]+)$#', $uri, $m)) {
+    $ad = basename($m[1]);
+    $sahip = $pdo->prepare('SELECT id FROM ogrenciler WHERE cv_yolu = ?');
+    $sahip->execute([$ad]);
+    $sahipId = $sahip->fetchColumn();
+    if ($sahipId === false) hataDondur(404, 'bulunamadi', 'CV bulunamadı');
+
+    $ben = istekOgrencisi($pdo);
+    $yonetici = istekKullanicisi($pdo);
+    if (!($ben && (int)$sahipId === $ben['id']) && !$yonetici) {
+        hataDondur(403, 'yetki_yok', 'Bu dosyayı görüntüleyemezsiniz');
+    }
+
+    $yol = YUKLEME_DIZINI . '/' . $ad;
+    if (!file_exists($yol)) hataDondur(404, 'bulunamadi', 'Dosya sunucuda yok');
+
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: inline; filename="cv.pdf"');
+    header('Content-Length: ' . filesize($yol));
+    header('X-Content-Type-Options: nosniff');
+    readfile($yol);
+    exit;
+}
+
+// --- Bölüm listesi (profil formu için, oturumsuz) ---
+if ($method === 'GET' && $uri === '/acik/bolumler') {
+    $satirlar = $pdo->query('SELECT id, ad FROM bolumler ORDER BY ad')->fetchAll();
+    basariDondur(array_map(fn($r) => ['id' => (int)$r['id'], 'ad' => $r['ad']], $satirlar));
+}
+
+// --- Aday detayı (yönetici) ---
+if ($method === 'GET' && preg_match('#^/adaylar/(\d+)$#', $uri, $m)) {
+    $y = girisZorunlu($pdo);
+    $ogrenciId = (int)$m[1];
+    $kapsam = ($y['rol'] === 'admin') ? null : $y['sirketId'];
+
+    // Şirket yöneticisi yalnızca kendi etkinliklerine başvurmuş adayı görebilir.
+    if ($kapsam !== null) {
+        $v = $pdo->prepare('
+            SELECT 1 FROM basvurular b JOIN etkinlikler e ON e.id = b.etkinlik_id
+            WHERE b.ogrenci_id = ? AND e.sirket_id = ? LIMIT 1
+        ');
+        $v->execute([$ogrenciId, $kapsam]);
+        if (!$v->fetch()) hataDondur(404, 'bulunamadi', 'Aday bulunamadı');
+    }
+
+    $profil = profilOku($pdo, $ogrenciId);
+    if (!$profil) hataDondur(404, 'bulunamadi', 'Aday bulunamadı');
+
+    // Başvurular — kapsam dışı şirketlerin etkinlikleri gösterilmez.
+    $sql = "
+        SELECT b.id, b.durum, b.basvuru_tarihi, b.karar_tarihi,
+               e.id AS etkinlik_id, e.baslik, e.tur, e.baslangic, e.sirket_id, s.ad AS sirket_adi
+        FROM basvurular b
+        JOIN etkinlikler e ON e.id = b.etkinlik_id
+        JOIN sirketler   s ON s.id = e.sirket_id
+        WHERE b.ogrenci_id = ?
+    ";
+    $params = [$ogrenciId];
+    if ($kapsam !== null) { $sql .= ' AND e.sirket_id = ?'; $params[] = $kapsam; }
+    $sql .= ' ORDER BY b.basvuru_tarihi DESC';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $basvurular = array_map(fn($r) => [
+        'id' => (int)$r['id'],
+        'durum' => $r['durum'],
+        'basvuruTarihi' => $r['basvuru_tarihi'],
+        'kararTarihi' => $r['karar_tarihi'],
+        'etkinlik' => [
+            'id' => (int)$r['etkinlik_id'], 'baslik' => $r['baslik'],
+            'tur' => $r['tur'], 'baslangic' => $r['baslangic'], 'sirket' => $r['sirket_adi'],
+        ],
+    ], $stmt->fetchAll());
+
+    // Adayın yorumları — yalnızca kapsamdaki etkinliklerde
+    $ysql = "
+        SELECT y.id, y.metin, y.olusturuldu, e.id AS etkinlik_id, e.baslik
+        FROM yorumlar y JOIN etkinlikler e ON e.id = y.etkinlik_id
+        WHERE y.ogrenci_id = ?
+    ";
+    $yparams = [$ogrenciId];
+    if ($kapsam !== null) { $ysql .= ' AND e.sirket_id = ?'; $yparams[] = $kapsam; }
+    $ysql .= ' ORDER BY y.olusturuldu DESC LIMIT 50';
+    $ystmt = $pdo->prepare($ysql);
+    $ystmt->execute($yparams);
+    $yorumlar = array_map(fn($r) => [
+        'id' => (int)$r['id'], 'metin' => $r['metin'], 'olusturuldu' => $r['olusturuldu'],
+        'etkinlik' => ['id' => (int)$r['etkinlik_id'], 'baslik' => $r['baslik']],
+    ], $ystmt->fetchAll());
+
+    basariDondur([
+        'profil' => $profil,
+        'cvAdresi' => $profil['cv'] ? '/etkinlig/api/cv/' . $profil['cv']['yol'] : null,
+        'basvurular' => $basvurular,
+        'yorumlar' => $yorumlar,
+    ]);
 }
 
 // Hiçbir rotaya uymadıysa 404

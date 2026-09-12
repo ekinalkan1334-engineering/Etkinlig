@@ -86,8 +86,14 @@ onMounted(yukle);
           </thead>
           <tbody>
             <tr v-for="b in kayitlar" :key="b.id">
-              <td class="kalin">{{ b.ogrenci.adSoyad }}</td>
-              <td class="notr">{{ b.ogrenci.bolum ?? '—' }} · {{ sinifEtiketi(b.ogrenci.sinif) }}</td>
+              <td>
+                <span class="kalin">{{ b.ogrenci.adSoyad }}</span>
+                <span class="alt">{{ b.ogrenci.eposta ?? "—" }}</span>
+              </td>
+              <td>
+                <span class="notr">{{ b.ogrenci.bolum ?? '—' }} · {{ sinifEtiketi(b.ogrenci.sinif) }}</span>
+                <span v-if="b.ogrenci.universite" class="alt">{{ b.ogrenci.universite }}</span>
+              </td>
               <td class="notr">{{ b.etkinlik.baslik }}</td>
               <td v-if="oturum.admin" class="notr">{{ b.sirket?.ad ?? '—' }}</td>
               <td class="notr">{{ tarih(b.basvuruTarihi) }} · {{ saat(b.basvuruTarihi) }}</td>
@@ -121,7 +127,8 @@ onMounted(yukle);
 }
 .tablo td { padding: 14px; border-top: 1px solid var(--line); }
 .sag { text-align: right; }
-.kalin { font-size: 13.5px; font-weight: 600; }
+.kalin { display: block; font-size: 13.5px; font-weight: 600; }
+.alt { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
 .notr { font-size: 13px; color: var(--ink-2); }
 .islemler { display: inline-flex; gap: 6px; }
 .islemler :deep(.btn) { width: 32px; height: 32px; border-radius: var(--r-sm); }
