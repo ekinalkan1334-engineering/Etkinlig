@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import './App.css'
 import logo from './logo.jpg';
+import KesifFilterBar from './components/KesifFilterBar';
+import KesifEventGrid from './components/KesifEventGrid';
+import kesifEventsData from './data/kesifEventsData';
 
 function App() {
   const [formData, setFormData] = useState({
@@ -8,6 +11,14 @@ function App() {
     email: '',
     sifre: ''
   });
+
+  // Kayıt başarılı olunca true olacak, keşif ekranını gösterecek
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Keşif ekranındaki filtre state'leri
+  const [activeCategory, setActiveCategory] = useState("Tümü");
+  const [activeLocation, setActiveLocation] = useState("Tüm konumlar");
+  const [searchValue, setSearchValue] = useState("");
 
   // Kullanıcı yazdıkça verileri hafızaya alır (Ekrana basmaz)
   const handleChange = (e) => {
@@ -30,6 +41,7 @@ function App() {
       if (response.ok) {
         alert("Kayıt Başarılı! Şifreniz arka planda güvenle hash'lendi.");
         setFormData({ adSoyad: "", email: "", sifre: "" });
+        setIsLoggedIn(true);
       } else {
         alert("Kayıt sırasında bir hata oluştu!");
       }
@@ -39,6 +51,65 @@ function App() {
     }
   };
 
+  // Kategori ve konum listelerini veriden otomatik çıkarıyoruz
+  const categories = useMemo(
+    () => [...new Set(kesifEventsData.map((event) => event.category))],
+    []
+  );
+
+  const locations = useMemo(
+    () => [...new Set(kesifEventsData.map((event) => event.location))],
+    []
+  );
+
+  // Kategori + konum + arama filtrelerini birlikte uygulayan liste
+  const filteredEvents = useMemo(() => {
+    return kesifEventsData.filter((event) => {
+      const matchesCategory =
+        activeCategory === "Tümü" || event.category === activeCategory;
+
+      const matchesLocation =
+        activeLocation === "Tüm konumlar" || event.location === activeLocation;
+
+      const matchesSearch =
+        searchValue.trim() === "" ||
+        event.title.toLowerCase().includes(searchValue.toLowerCase()) ||
+        event.location.toLowerCase().includes(searchValue.toLowerCase());
+
+      return matchesCategory && matchesLocation && matchesSearch;
+    });
+  }, [activeCategory, activeLocation, searchValue]);
+
+  const handleDetailClick = (event) => {
+    console.log("Detayı görüntülenecek etkinlik:", event);
+  };
+
+  // Kayıt başarılıysa keşif ekranını göster
+  if (isLoggedIn) {
+    return (
+      <div style={{ padding: "24px 32px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+          <img src={logo} alt="EtkinLig Logo" style={{ height: "40px" }} />
+          <h1 style={{ margin: 0 }}>Etkinlikleri keşfet</h1>
+        </div>
+
+        <KesifFilterBar
+          categories={categories}
+          activeCategory={activeCategory}
+          onCategoryChange={setActiveCategory}
+          locations={locations}
+          activeLocation={activeLocation}
+          onLocationChange={setActiveLocation}
+          searchValue={searchValue}
+          onSearchChange={setSearchValue}
+        />
+
+        <KesifEventGrid events={filteredEvents} onDetailClick={handleDetailClick} />
+      </div>
+    );
+  }
+
+  // Kayıt olunmadıysa arkadaşının giriş/kayıt ekranı gösterilir
   return (
     <div className="split-screen">
       {/* SOL TARAF: Logo ve Tanıtım */}

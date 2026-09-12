@@ -1,0 +1,31 @@
+.kesif-event-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 8px 0 48px;
+}
+
+.kesif-event-grid__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 64px 16px;
+  color: var(--event-ink-muted);
+  font-family: var(--event-font-body);
+}
+
+.kesif-event-grid__empty p {
+  font-family: var(--event-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--event-ink);
+  margin: 0;
+}
+
+.kesif-event-grid__empty span {
+  font-size: 14px;
+}
