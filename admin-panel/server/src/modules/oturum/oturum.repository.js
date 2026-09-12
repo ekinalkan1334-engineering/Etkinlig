@@ -1,6 +1,6 @@
 import { execute, queryAll, queryOne } from '../../db/pool.js';
 
-const ALANLAR = 'id, ad_soyad, eposta, rol, aktif, son_giris, olusturuldu';
+const ALANLAR = 'id, ad_soyad, eposta, rol, sirket_id, aktif, son_giris, olusturuldu';
 
 export const epostaIleBul = (eposta) =>
   queryOne(`SELECT ${ALANLAR}, parola_hash FROM kullanicilar WHERE eposta = :eposta`, { eposta });

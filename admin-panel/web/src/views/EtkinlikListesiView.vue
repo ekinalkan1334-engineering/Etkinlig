@@ -13,15 +13,24 @@ import SayfaGezgini from '@/components/ui/SayfaGezgini.vue';
 import DurumMesaji from '@/components/ui/DurumMesaji.vue';
 import { useEtkinlikListesi } from '@/viewmodels/useEtkinlikListesi.js';
 import { useTanimlarStore } from '@/stores/tanimlar.js';
+import { useOturumStore } from '@/stores/oturum.js';
 import { saat, tarih } from '@/utils/format.js';
 
 const router = useRouter();
 const tanimlar = useTanimlarStore();
+const oturum = useOturumStore();
 const vm = useEtkinlikListesi();
 
 onMounted(() => vm.yukle());
 
+const duzenleyebilir = (e) => {
+  if (oturum.admin) return true;
+  if (!oturum.kullanici?.sirketId) return false;
+  return e.sirket?.id === oturum.kullanici.sirketId;
+};
+
 async function sil(e) {
+  if (!duzenleyebilir(e)) return;
   if (!window.confirm(`"${e.baslik}" silinsin mi? Bu işlem geri alınamaz.`)) return;
   await vm.sil(e.id);
 }
@@ -100,11 +109,14 @@ async function sil(e) {
               <td><DurumRozeti :durum="e.durum" /></td>
               <td class="sag">
                 <div class="islemler">
-                  <AppButton
-                    yalniz-simge simge="duzenle" title="Düzenle"
-                    @click="router.push({ name: 'etkinlik-duzenle', params: { id: e.id } })"
-                  />
-                  <AppButton yalniz-simge simge="cop" cesit="tehlike" title="Sil" @click="sil(e)" />
+                  <template v-if="duzenleyebilir(e)">
+                    <AppButton
+                      yalniz-simge simge="duzenle" title="Düzenle"
+                      @click="router.push({ name: 'etkinlik-duzenle', params: { id: e.id } })"
+                    />
+                    <AppButton yalniz-simge simge="cop" cesit="tehlike" title="Sil" @click="sil(e)" />
+                  </template>
+                  <span v-else class="hucre__alt" title="Yalnızca kendi şirketinizin etkinliklerini düzenleyebilirsiniz">—</span>
                 </div>
               </td>
             </tr>

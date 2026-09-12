@@ -10,12 +10,14 @@ import FormAlani from '@/components/ui/FormAlani.vue';
 import SecimCipi from '@/components/ui/SecimCipi.vue';
 import { useEtkinlikForm } from '@/viewmodels/useEtkinlikForm.js';
 import { useTanimlarStore } from '@/stores/tanimlar.js';
+import { useOturumStore } from '@/stores/oturum.js';
 import { etkinlikService } from '@/services';
 import { sinifEtiketi } from '@/utils/format.js';
 
 const route = useRoute();
 const router = useRouter();
 const tanimlar = useTanimlarStore();
+const oturum = useOturumStore();
 const vm = useEtkinlikForm();
 
 const duzenleme = computed(() => !!route.params.id);
@@ -24,6 +26,11 @@ onMounted(async () => {
   await tanimlar.yukle();
   if (duzenleme.value) {
     const { data } = await etkinlikService.bul(Number(route.params.id));
+    if (!oturum.admin && oturum.kullanici?.sirketId && data.sirket?.id !== oturum.kullanici.sirketId) {
+      alert('Başka bir şirkete ait etkinliği düzenleyemezsiniz.');
+      router.replace({ name: 'etkinlikler' });
+      return;
+    }
     vm.doldur(data);
   }
 });
@@ -76,9 +83,14 @@ async function kaydet(durum) {
             </FormAlani>
 
             <div class="ikili">
-              <FormAlani etiket="Şirket / kurum" zorunlu :hata="vm.hatalar.value.sirketId">
+              <FormAlani
+                etiket="Şirket / kurum"
+                zorunlu
+                :hata="vm.hatalar.value.sirketId"
+                :yardim="vm.sirketSecimiKilitli.value ? 'Bağlı olduğunuz şirket otomatik seçilmiştir ve değiştirilemez.' : ''"
+              >
                 <template #default="{ hatali }">
-                  <select v-model="vm.model.sirketId" :aria-invalid="hatali">
+                  <select v-model="vm.model.sirketId" :aria-invalid="hatali" :disabled="vm.sirketSecimiKilitli.value">
                     <option value="">Şirket seçin</option>
                     <option v-for="s in tanimlar.sirketler" :key="s.id" :value="s.id">{{ s.ad }}</option>
                   </select>

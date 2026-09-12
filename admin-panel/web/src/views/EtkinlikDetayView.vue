@@ -12,14 +12,23 @@ import StatKart from '@/components/ui/StatKart.vue';
 import DurumMesaji from '@/components/ui/DurumMesaji.vue';
 import { useEtkinlikDetay } from '@/viewmodels/useEtkinlikDetay.js';
 import { useTanimlarStore } from '@/stores/tanimlar.js';
+import { useOturumStore } from '@/stores/oturum.js';
 import { saat, sinifEtiketi, tarih, tarihUzun } from '@/utils/format.js';
 
 const route = useRoute();
 const router = useRouter();
 const tanimlar = useTanimlarStore();
+const oturum = useOturumStore();
 const vm = useEtkinlikDetay(Number(route.params.id));
 
 onMounted(() => vm.yukle());
+
+const duzenleyebilir = (e) => {
+  if (!e) return false;
+  if (oturum.admin) return true;
+  if (!oturum.kullanici?.sirketId) return false;
+  return e.sirket?.id === oturum.kullanici.sirketId;
+};
 
 const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 </script>
@@ -31,13 +40,15 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
   >
     <template #aksiyon>
       <AppButton cesit="hayalet" simge="geri" @click="router.push({ name: 'etkinlikler' })">Listeye dön</AppButton>
-      <AppButton simge="duzenle" @click="router.push({ name: 'etkinlik-duzenle', params: { id: route.params.id } })">
-        Düzenle
-      </AppButton>
-      <AppButton
-        v-if="vm.etkinlik.value?.durum === 'taslak'" cesit="birincil" simge="onay"
-        @click="vm.durumDegistir('yayinda')"
-      >Yayınla</AppButton>
+      <template v-if="duzenleyebilir(vm.etkinlik.value)">
+        <AppButton simge="duzenle" @click="router.push({ name: 'etkinlik-duzenle', params: { id: route.params.id } })">
+          Düzenle
+        </AppButton>
+        <AppButton
+          v-if="vm.etkinlik.value?.durum === 'taslak'" cesit="birincil" simge="onay"
+          @click="vm.durumDegistir('yayinda')"
+        >Yayınla</AppButton>
+      </template>
     </template>
   </AppUstCubuk>
 

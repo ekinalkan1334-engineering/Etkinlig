@@ -18,23 +18,32 @@ etkinlikRouter.get('/:id', asyncHandler(async (req, res) => {
 
 etkinlikRouter.post('/', asyncHandler(async (req, res) => {
   const govde = parse(olusturGovdesi, req.body);
+  if (req.kullanici.rol !== 'admin' && req.kullanici.sirketId) {
+    govde.sirketId = req.kullanici.sirketId;
+  }
   created(res, await service.olustur({ ...govde, olusturanId: req.kullanici.id }));
 }));
 
 etkinlikRouter.put('/:id', asyncHandler(async (req, res) => {
   const { id } = parse(idParam, req.params);
+  await service.yetkiKontrol(id, req.kullanici);
   const govde = parse(guncelleGovdesi, req.body);
+  if (req.kullanici.rol !== 'admin' && req.kullanici.sirketId) {
+    govde.sirketId = req.kullanici.sirketId;
+  }
   ok(res, await service.guncelle(id, govde));
 }));
 
 etkinlikRouter.patch('/:id/durum', asyncHandler(async (req, res) => {
   const { id } = parse(idParam, req.params);
+  await service.yetkiKontrol(id, req.kullanici);
   const { durum } = parse(durumGovdesi, req.body);
   ok(res, await service.durumDegistir(id, durum));
 }));
 
 etkinlikRouter.delete('/:id', asyncHandler(async (req, res) => {
   const { id } = parse(idParam, req.params);
+  await service.yetkiKontrol(id, req.kullanici);
   await service.sil(id);
   res.status(204).end();
 }));

@@ -12,13 +12,14 @@ export const cevir = (r) => ({
   adSoyad: r.ad_soyad,
   eposta: r.eposta,
   rol: r.rol,
+  sirketId: r.sirket_id ?? null,
   aktif: !!r.aktif,
   sonGiris: r.son_giris,
   olusturuldu: r.olusturuldu,
 });
 
 export const jetonUret = (kullanici) =>
-  jwt.sign({ sub: kullanici.id, rol: kullanici.rol }, env.jwt.gizli, { expiresIn: env.jwt.sure });
+  jwt.sign({ sub: kullanici.id, rol: kullanici.rol, sirketId: kullanici.sirketId ?? null }, env.jwt.gizli, { expiresIn: env.jwt.sure });
 
 export function jetonCoz(jeton) {
   try {

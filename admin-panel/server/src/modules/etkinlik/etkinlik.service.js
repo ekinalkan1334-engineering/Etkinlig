@@ -85,3 +85,11 @@ export async function sil(id) {
   const silindi = await repo.sil(id);
   if (!silindi) throw ApiError.notFound('Etkinlik bulunamadı');
 }
+
+export async function yetkiKontrol(id, kullanici) {
+  if (!kullanici || kullanici.rol === 'admin') return;
+  const etkinlik = await bul(id);
+  if (kullanici.sirketId && etkinlik.sirket.id !== kullanici.sirketId) {
+    throw new ApiError(403, 'yetki_yok', 'Başka bir şirkete ait etkinliği düzenleyemez veya silemezsiniz');
+  }
+}
