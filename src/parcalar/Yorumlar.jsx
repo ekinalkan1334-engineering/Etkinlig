@@ -59,7 +59,11 @@ export default function Yorumlar({ etkinlikId }) {
 
       {ogrenci ? (
         <form className="yorum-form" onSubmit={gonder}>
-          <span className="yorum__avatar" aria-hidden="true">{basHarfler(ogrenci.adSoyad)}</span>
+          {ogrenci.foto ? (
+            <img className="yorum__avatar yorum__avatar--foto" src={ogrenci.foto} alt="" />
+          ) : (
+            <span className="yorum__avatar" aria-hidden="true">{basHarfler(ogrenci.adSoyad)}</span>
+          )}
           <div className="yorum-form__alan">
             <textarea
               value={metin}
@@ -91,7 +95,11 @@ export default function Yorumlar({ etkinlikId }) {
         <ul className="yorum-listesi">
           {liste.map((y) => (
             <li key={y.id} className="yorum">
-              <span className="yorum__avatar" aria-hidden="true">{basHarfler(y.yazar.adSoyad)}</span>
+              {y.yazar.foto ? (
+                <img className="yorum__avatar yorum__avatar--foto" src={y.yazar.foto} alt="" />
+              ) : (
+                <span className="yorum__avatar" aria-hidden="true">{basHarfler(y.yazar.adSoyad)}</span>
+              )}
               <div className="yorum__govde">
                 <div className="yorum__ust">
                   <strong>{y.yazar.adSoyad}</strong>

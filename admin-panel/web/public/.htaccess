@@ -1,0 +1,8 @@
+# Panel tek sayfalık uygulama: gerçek dosya yoksa index.html'e düş.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /admin/
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /admin/index.html [L]
+</IfModule>

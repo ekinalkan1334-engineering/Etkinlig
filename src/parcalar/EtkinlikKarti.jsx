@@ -1,20 +1,34 @@
 import { Doluluk, TurEtiketi } from './temel.jsx';
-import { ayKisa, gunNo, kalanGun, saat, TUR } from '../bicim.js';
+import { ayKisa, gunNo, kalanGun, saat } from '../bicim.js';
+import { kapakGorseli } from '../gorseller.js';
 
 export default function EtkinlikKarti({ etkinlik, basvuruDurumu }) {
-  const { id, baslik, sirket, sehir, ilce, baslangic, gorsel, tur, katilimci, kontenjan, kalanKontenjan } = etkinlik;
+  const { id, baslik, sirket, sehir, ilce, baslangic, gorsel, tur, katilimci, kontenjan, kalanKontenjan, uygunluk } = etkinlik;
+  // uygunluk yalnızca giriş yapmış kullanıcıda gelir; misafirde null.
+  const engel = uygunluk && !uygunluk.uygun && !basvuruDurumu;
+  const engelNedeni = engel
+    ? (uygunluk.eksikler?.length
+        ? `Profilinde ${uygunluk.eksikler.join(', ')} eksik`
+        : uygunluk.nedenler?.[0] ?? 'Şartları sağlamıyorsun')
+    : null;
+  // Şirket kapak yüklemediyse türe/başlığa göre bir banner düşer.
+  const kapak = kapakGorseli(etkinlik);
   const adres = `#/etkinlik/${id}`;
 
   return (
-    <article className="kart">
+    <article className={engel ? 'kart kart--engelli' : 'kart'}>
       <a className="kart__kapak" href={adres} aria-label={`${baslik} detayı`}>
-        {gorsel
-          ? <img src={gorsel} alt="" loading="lazy" />
-          : <span className={`kart__yedek kart__yedek--${tur}`}>{TUR[tur] ?? ''}</span>}
+        <img
+          src={kapak}
+          alt=""
+          loading="lazy"
+          className={gorsel ? 'kart__gorsel' : 'kart__gorsel kart__gorsel--dolgu'}
+        />
         <span className="kart__tarih">
           <strong>{gunNo(baslangic)}</strong>
           <em>{ayKisa(baslangic)}</em>
         </span>
+        {engel && <span className="kart__engel">Başvuramazsın</span>}
       </a>
 
       <div className="kart__govde">
@@ -35,6 +49,8 @@ export default function EtkinlikKarti({ etkinlik, basvuruDurumu }) {
         <div className="kart__dip">
           {basvuruDurumu ? (
             <span className="kart__basvurdum">Başvurdunuz</span>
+          ) : engel ? (
+            <span className="kart__engel-neden" title={engelNedeni}>{engelNedeni}</span>
           ) : (
             <span className="kart__yer-kaldi">
               {kalanKontenjan > 0 ? `${kalanKontenjan} yer kaldı` : 'Kontenjan doldu'}

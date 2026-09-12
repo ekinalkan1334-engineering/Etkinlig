@@ -1,4 +1,4 @@
-const TEMEL = import.meta.env.VITE_API_URL ?? '/etkinlig/api';
+const TEMEL = import.meta.env.VITE_API_URL ?? '/api';
 
 export class ApiHatasi extends Error {
   constructor(status, code, message, details) {
@@ -26,10 +26,21 @@ const sorguDizesi = (params) => {
 
 /** Tüm istekler tek kapıdan — çerez taşıma, hata çevirisi ve JSON zarfı burada. */
 async function istek(yol, { method = 'GET', body, params } = {}) {
+  const basliklar = {};
+  if (body) basliklar['Content-Type'] = 'application/json';
+
+  // IIS+WebDAV gibi kurulumlar PUT/PATCH/DELETE'i sunucuya ulaştırmıyor;
+  // bu metotlar POST olarak gidip gerçeğini başlıkta bildiriyor.
+  let gercekMetot = method;
+  if (method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+    basliklar['X-HTTP-Method-Override'] = method;
+    gercekMetot = 'POST';
+  }
+
   const yanit = await fetch(`${TEMEL}${yol}${sorguDizesi(params)}`, {
-    method,
+    method: gercekMetot,
     credentials: 'include',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: basliklar,
     body: body ? JSON.stringify(body) : undefined,
   });
 
@@ -39,7 +50,7 @@ async function istek(yol, { method = 'GET', body, params } = {}) {
   if (!yanit.ok) {
     const hata = govde?.error ?? {};
     if (yanit.status === 401 && !yol.startsWith('/oturum')) oturumDustuHandler?.();
-    throw new ApiHatasi(yanit.status, hata.code ?? 'bilinmeyen', hata.message ?? 'İstek başarısız oldu', hata.details);
+    throw new ApiHatasi(yanit.status, hata.code ?? `http_${yanit.status}`, hata.message ?? `Sunucu ${yanit.status} döndürdü`, hata.details);
   }
   return govde;
 }

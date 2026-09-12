@@ -1,7 +1,7 @@
 import { useOturum } from '../oturum.jsx';
 import { git, yoluCoz } from '../rota.js';
 import { basHarfler } from '../bicim.js';
-import siteImg from '../assets/site_img.jpeg';
+import logo from '../assets/logo-etkinlig.png';
 
 export default function UstCubuk({ yol }) {
   const { ogrenci, cikis, basvurular } = useOturum();
@@ -10,8 +10,7 @@ export default function UstCubuk({ yol }) {
   return (
     <header className="ust">
       <a className="marka" href="#/" aria-label="Ana sayfa">
-        <img src={siteImg} alt="etkinlig" className="marka__gorsel" />
-        <span className="marka__ad">etkinlig</span>
+        <img className="marka__logo" src={logo} alt="etkinlig" />
       </a>
 
       <nav className="ust__gezinme">
@@ -26,8 +25,12 @@ export default function UstCubuk({ yol }) {
 
       {ogrenci ? (
         <div className="ust__hesap">
-          <span className="ust__avatar" aria-hidden="true">{basHarfler(ogrenci.adSoyad)}</span>
-          <span className="ust__isim">{ogrenci.adSoyad}</span>
+          <a href="#/profil" className={sayfa === 'profil' ? 'ust__kisi ust__kisi--aktif' : 'ust__kisi'}>
+            {ogrenci.foto
+              ? <img className="ust__avatar ust__avatar--foto" src={ogrenci.foto} alt="" />
+              : <span className="ust__avatar" aria-hidden="true">{basHarfler(ogrenci.adSoyad)}</span>}
+            <span className="ust__isim">{ogrenci.adSoyad}</span>
+          </a>
           <button type="button" className="dugme dugme--sade" onClick={() => cikis().then(() => git('/'))}>
             Çıkış
           </button>

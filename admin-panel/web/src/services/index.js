@@ -9,7 +9,7 @@ export const etkinlikService = {
   durumDegistir: (id, durum) => http.patch(`/etkinlikler/${id}/durum`, { durum }),
   sil: (id) => http.del(`/etkinlikler/${id}`),
   /** Tarayıcı doğrudan bu adrese gider; oturum çerezi isteğe eklenir. */
-  raporAdresi: (id) => `${import.meta.env.VITE_API_URL ?? '/etkinlig/api'}/etkinlikler/${id}/katilimcilar.xlsx`,
+  raporAdresi: (id) => `${import.meta.env.VITE_API_URL ?? '/api'}/etkinlikler/${id}/katilimcilar.xlsx`,
 };
 
 export const gorselService = {
@@ -17,8 +17,7 @@ export const gorselService = {
   async yukle(dosya) {
     const govde = new FormData();
     govde.append('gorsel', dosya);
-    const temel = import.meta.env.VITE_API_URL ?? '/etkinlig/api';
-    const yanit = await fetch(`${temel}/gorseller`, {
+    const yanit = await fetch(`${import.meta.env.VITE_API_URL ?? '/api'}/gorseller`, {
       method: 'POST',
       credentials: 'include',
       body: govde,
@@ -59,4 +58,13 @@ export const kullaniciService = {
   guncelle: (id, govde) => http.patch(`/kullanicilar/${id}`, govde),
   parolaSifirla: (id, yeniParola) => http.patch(`/kullanicilar/${id}/parola`, { yeniParola }),
   sil: (id) => http.del(`/kullanicilar/${id}`),
+};
+
+export const adayService = {
+  bul: (ogrenciId) => http.get(`/adaylar/${ogrenciId}`),
+};
+
+export const yoklamaService = {
+  oku: (etkinlikId) => http.get(`/etkinlikler/${etkinlikId}/yoklama-kodu`),
+  uret: (etkinlikId, kod) => http.post(`/etkinlikler/${etkinlikId}/yoklama-kodu`, kod ? { kod } : {}),
 };

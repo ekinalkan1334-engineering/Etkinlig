@@ -9,21 +9,19 @@ export const useOturumStore = defineStore('oturum', () => {
   const hazir = ref(false);       // ilk kontrol tamamlandı mı
   const islemde = ref(false);
 
-  const safKullanici = computed(() => kullanici.value?.kullanici ?? kullanici.value);
-  const girisYapildi = computed(() => !!safKullanici.value);
+  const girisYapildi = computed(() => !!kullanici.value);
   /** Genel yönetici: tüm şirketleri görür, hesap açar. */
-  const admin = computed(() => safKullanici.value?.rol === 'admin');
-  const sirketAdmini = computed(() => safKullanici.value?.rol === 'sirket_admin');
-  const sirketAdi = computed(() => safKullanici.value?.sirketAdi ?? null);
-  const sirketId = computed(() => safKullanici.value?.sirketId ?? null);
-  const rolEtiketi = computed(() => (admin.value ? 'Genel yönetici' : (sirketAdi.value ? `${sirketAdi.value} Yöneticisi` : 'Şirket yöneticisi')));
+  const admin = computed(() => kullanici.value?.rol === 'admin');
+  const sirketAdmini = computed(() => kullanici.value?.rol === 'sirket_admin');
+  const sirketAdi = computed(() => kullanici.value?.sirketAdi ?? null);
+  const rolEtiketi = computed(() => (admin.value ? 'Genel yönetici' : 'Şirket yöneticisi'));
 
   /** Uygulama açılışında bir kez: çerez geçerli mi, sistem kurulu mu? */
   async function baslat() {
     if (hazir.value) return;
     try {
       const { data } = await oturumService.ben();
-      kullanici.value = data?.kullanici ?? data;
+      kullanici.value = data;
     } catch {
       kullanici.value = null;
       try {
@@ -41,9 +39,9 @@ export const useOturumStore = defineStore('oturum', () => {
     islemde.value = true;
     try {
       const { data } = await oturumService.giris(govde);
-      kullanici.value = data?.kullanici ?? data;
+      kullanici.value = data;
       kurulumGerekli.value = false;
-      return kullanici.value;
+      return data;
     } finally {
       islemde.value = false;
     }
@@ -53,9 +51,9 @@ export const useOturumStore = defineStore('oturum', () => {
     islemde.value = true;
     try {
       const { data } = await oturumService.kurulum(govde);
-      kullanici.value = data?.kullanici ?? data;
+      kullanici.value = data;
       kurulumGerekli.value = false;
-      return kullanici.value;
+      return data;
     } finally {
       islemde.value = false;
     }
@@ -67,18 +65,12 @@ export const useOturumStore = defineStore('oturum', () => {
 
   const parolaDegistir = (govde) => oturumService.parolaDegistir(govde);
 
-  /** Kullanıcı bu etkinliği düzenleyebilir mi? (Admin her şeyi düzenler, şirket yöneticisi yalnızca kendi şirketini) */
-  function duzenleyebilir(etkinlikVeyaKayit) {
-    const k = safKullanici.value;
-    if (!k) return false;
-    if (admin.value) return true;
-    const sId = etkinlikVeyaKayit?.sirket?.id ?? etkinlikVeyaKayit?.sirketId ?? etkinlikVeyaKayit?.sirket_id;
-    return Number(k.sirketId) === Number(sId);
-  }
+  // API 401 dönerse oturumu düşür; router guard giriş ekranına alır.
+  oturumDustugundeCagir(() => { kullanici.value = null; });
 
   return {
-    kullanici: safKullanici, kurulumGerekli, hazir, islemde,
-    girisYapildi, admin, sirketAdmini, sirketAdi, sirketId, rolEtiketi,
-    baslat, giris, kurulum, cikis, parolaDegistir, duzenleyebilir,
+    kullanici, kurulumGerekli, hazir, islemde,
+    girisYapildi, admin, sirketAdmini, sirketAdi, rolEtiketi,
+    baslat, giris, kurulum, cikis, parolaDegistir,
   };
 });

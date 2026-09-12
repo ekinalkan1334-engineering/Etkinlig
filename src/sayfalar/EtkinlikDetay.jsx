@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import * as api from '../api.js';
 import { useOturum } from '../oturum.jsx';
 import Yorumlar from '../parcalar/Yorumlar.jsx';
+import Yoklama from '../parcalar/Yoklama.jsx';
 import { Doluluk, Durum, DurumEtiketi, Simge, TurEtiketi } from '../parcalar/temel.jsx';
 import { BASVURU_DURUM, DURUM_TONU, DUZEY, basHarfler, gun, kalanGun, saat, SINIF, tarih, TUR } from '../bicim.js';
 
+import { kapakGorseli } from '../gorseller.js';
 import logoTechnobridge from '../assets/firma_gorselleri/technobridge.webp';
 import logoPapara from '../assets/firma_gorselleri/papara-logo.jpg';
 import logoAselsan from '../assets/firma_gorselleri/aselsan.png';
@@ -30,7 +32,7 @@ function sirketLogosuBul(sirketAdi) {
 }
 
 export default function EtkinlikDetay({ id }) {
-  const { ogrenci, basvur, basvurumVar } = useOturum();
+  const { ogrenci, basvur, basvurumVar, basvurulariTazele } = useOturum();
   const [etkinlik, setEtkinlik] = useState(null);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [hata, setHata] = useState(null);
@@ -57,7 +59,12 @@ export default function EtkinlikDetay({ id }) {
       setUyari({ tip: 'iyi', mesaj: sonuc.mesaj });
       setEtkinlik((e) => (e ? { ...e, katilimci: e.katilimci + (sonuc.durum === 'onaylandi' ? 1 : 0) } : e));
     } catch (e) {
-      setUyari({ tip: 'kotu', mesaj: e.message });
+      setUyari({
+        tip: 'kotu',
+        mesaj: e.message,
+        nedenler: e.detay?.nedenler ?? e.detay?.eksikler ?? null,
+        profile: e.kod === 'profil_eksik' || e.kod === 'sart_saglanmiyor',
+      });
     } finally {
       setGonderiliyor(false);
     }
@@ -90,11 +97,9 @@ export default function EtkinlikDetay({ id }) {
         <p className="detay__sirket">{etkinlik.sirket}</p>
       </header>
 
-      {etkinlik.gorsel && (
-        <figure className="detay__kapak">
-          <img src={etkinlik.gorsel} alt={`${etkinlik.baslik} görseli`} />
-        </figure>
-      )}
+      <figure className={etkinlik.gorsel ? 'detay__kapak' : 'detay__kapak detay__kapak--dolgu'}>
+        <img src={kapakGorseli(etkinlik)} alt={`${etkinlik.baslik} görseli`} />
+      </figure>
 
       <div className="detay__duzen">
         <div className="detay__ana">
@@ -176,7 +181,15 @@ export default function EtkinlikDetay({ id }) {
             </div>
 
             {uyari && (
-              <p className={uyari.tip === 'iyi' ? 'uyari uyari--iyi' : 'uyari uyari--kotu'}>{uyari.mesaj}</p>
+              <div className={uyari.tip === 'iyi' ? 'uyari uyari--iyi' : 'uyari uyari--kotu'}>
+                <p>{uyari.mesaj}</p>
+                {uyari.nedenler && (
+                  <ul className="uyari__liste">
+                    {uyari.nedenler.map((n) => <li key={n}>{n}</li>)}
+                  </ul>
+                )}
+                {uyari.profile && <a className="uyari__bag" href="#/profil">Profilimi düzenle</a>}
+              </div>
             )}
 
             {basvurum ? (
@@ -185,6 +198,13 @@ export default function EtkinlikDetay({ id }) {
                   {BASVURU_DURUM[basvurum.durum] ?? basvurum.durum}
                 </DurumEtiketi>
                 <p>Bu etkinliğe {tarih(basvurum.basvuruTarihi)} tarihinde başvurdunuz.</p>
+                {basvurum.durum === 'onaylandi' && (
+                  <Yoklama
+                    etkinlikId={id}
+                    katildi={basvurum.katildi}
+                    onKatildi={() => basvurulariTazele()}
+                  />
+                )}
                 <a className="dugme dugme--sade dugme--genis" href="#/basvurularim">Başvurularım</a>
               </div>
             ) : !ogrenci ? (
@@ -194,13 +214,29 @@ export default function EtkinlikDetay({ id }) {
               </>
             ) : (
               <>
+                {etkinlik.uygunluk && !etkinlik.uygunluk.uygun && (
+                  <div className="uyari uyari--kotu">
+                    <p>Bu etkinliğin şartlarını sağlamıyorsun.</p>
+                    <ul className="uyari__liste">
+                      {(etkinlik.uygunluk.eksikler?.length
+                        ? etkinlik.uygunluk.eksikler.map((e) => `Profilinde ${e} eksik`)
+                        : etkinlik.uygunluk.nedenler
+                      ).map((n) => <li key={n}>{n}</li>)}
+                    </ul>
+                    <a className="uyari__bag" href="#/profil">Profilimi düzenle</a>
+                  </div>
+                )}
                 <button
                   type="button"
                   className="dugme dugme--birincil dugme--genis"
                   onClick={basvuruGonder}
-                  disabled={gonderiliyor || !etkinlik.basvuruyaAcik}
+                  disabled={gonderiliyor || !etkinlik.basvuruyaAcik || (etkinlik.uygunluk && !etkinlik.uygunluk.uygun)}
                 >
-                  {gonderiliyor ? 'Gönderiliyor…' : etkinlik.basvuruyaAcik ? 'Başvur' : 'Başvurular kapalı'}
+                  {gonderiliyor
+                    ? 'Gönderiliyor…'
+                    : etkinlik.uygunluk && !etkinlik.uygunluk.uygun
+                      ? 'Başvuramazsın'
+                      : etkinlik.basvuruyaAcik ? 'Başvur' : 'Başvurular kapalı'}
                 </button>
                 {doldu && etkinlik.basvuruyaAcik && (
                   <p className="basvuru-kutusu__not">Kontenjan dolu; başvurun yedek listeye alınır.</p>

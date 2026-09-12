@@ -35,5 +35,6 @@ export function yoluCoz(yol) {
   if (p[0] === 'etkinlik' && p[1]) return { sayfa: 'etkinlik', id: p[1] };
   if (p[0] === 'basvurularim') return { sayfa: 'basvurularim' };
   if (p[0] === 'giris') return { sayfa: 'giris' };
+  if (p[0] === 'profil') return { sayfa: 'profil' };
   return { sayfa: 'yok' };
 }

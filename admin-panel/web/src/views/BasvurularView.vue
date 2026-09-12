@@ -87,7 +87,10 @@ onMounted(yukle);
           <tbody>
             <tr v-for="b in kayitlar" :key="b.id">
               <td>
-                <span class="kalin">{{ b.ogrenci.adSoyad }}</span>
+                <RouterLink :to="{ name: 'aday', params: { id: b.ogrenci.id }, query: { basvuru: b.id } }" class="kalin baglanti">
+                  {{ b.ogrenci.adSoyad }}
+                  <em v-if="b.ogrenci.cvVar" class="cv-isaret">CV</em>
+                </RouterLink>
                 <span class="alt">{{ b.ogrenci.eposta ?? "—" }}</span>
               </td>
               <td>
@@ -97,7 +100,10 @@ onMounted(yukle);
               <td class="notr">{{ b.etkinlik.baslik }}</td>
               <td v-if="oturum.admin" class="notr">{{ b.sirket?.ad ?? '—' }}</td>
               <td class="notr">{{ tarih(b.basvuruTarihi) }} · {{ saat(b.basvuruTarihi) }}</td>
-              <td><DurumRozeti :durum="b.durum" kapsam="basvuru" /></td>
+              <td>
+                <DurumRozeti :durum="b.durum" kapsam="basvuru" />
+                <span v-if="b.katildi" class="katildi">Katıldı</span>
+              </td>
               <td class="sag">
                 <div class="islemler">
                   <AppButton v-if="b.durum !== 'onaylandi'" yalniz-simge simge="onay" title="Onayla" @click="karar(b.id, 'onaylandi')" />
@@ -128,8 +134,15 @@ onMounted(yukle);
 .tablo td { padding: 14px; border-top: 1px solid var(--line); }
 .sag { text-align: right; }
 .kalin { display: block; font-size: 13.5px; font-weight: 600; }
+.baglanti:hover { color: var(--konferans-deep); }
 .alt { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
 .notr { font-size: 13px; color: var(--ink-2); }
+.katildi { display: block; margin-top: 5px; font-size: 11.5px; font-weight: 600; color: var(--sunum-deep); }
 .islemler { display: inline-flex; gap: 6px; }
 .islemler :deep(.btn) { width: 32px; height: 32px; border-radius: var(--r-sm); }
+.cv-isaret {
+  margin-left: 7px; padding: 1px 6px; border-radius: 999px; font-style: normal;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  background: var(--sunum-tint); color: var(--sunum-deep); border: 1px solid var(--sunum-line);
+}
 </style>

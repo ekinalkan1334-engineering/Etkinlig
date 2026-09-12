@@ -11,6 +11,7 @@ const OturumBaglami = createContext(null);
 export function OturumSaglayici({ children }) {
   const [ogrenci, setOgrenci] = useState(null);
   const [basvurular, setBasvurular] = useState([]);
+  const [rozetler, setRozetler] = useState({ toplam: 0, turler: {} });
   const [hazir, setHazir] = useState(false);
 
   const basvurulariTazele = useCallback(async () => {
@@ -18,6 +19,11 @@ export function OturumSaglayici({ children }) {
       setBasvurular(await api.basvurularimiGetir() ?? []);
     } catch {
       setBasvurular([]);
+    }
+    try {
+      setRozetler(await api.rozetlerimiGetir() ?? { toplam: 0, turler: {} });
+    } catch {
+      setRozetler({ toplam: 0, turler: {} });
     }
   }, []);
 
@@ -53,6 +59,7 @@ export function OturumSaglayici({ children }) {
       api.jetonYaz(null);
       setOgrenci(null);
       setBasvurular([]);
+      setRozetler({ toplam: 0, turler: {} });
     }
   }, []);
 
@@ -62,14 +69,19 @@ export function OturumSaglayici({ children }) {
     return sonuc;
   }, [basvurulariTazele]);
 
+  /** Profil sayfası kaydedince üst çubuktaki ad ve fotoğraf da tazelensin. */
+  const profilTazele = useCallback((yeni) => {
+    setOgrenci((o) => (o ? { ...o, ...yeni } : o));
+  }, []);
+
   const basvurumVar = useCallback(
     (etkinlikId) => basvurular.find((b) => b.etkinlik.id === Number(etkinlikId)) ?? null,
     [basvurular],
   );
 
   const deger = useMemo(
-    () => ({ ogrenci, basvurular, hazir, giris, kayit, cikis, basvur, basvurumVar, basvurulariTazele }),
-    [ogrenci, basvurular, hazir, giris, kayit, cikis, basvur, basvurumVar, basvurulariTazele],
+    () => ({ ogrenci, basvurular, rozetler, hazir, giris, kayit, cikis, basvur, basvurumVar, basvurulariTazele, profilTazele }),
+    [ogrenci, basvurular, rozetler, hazir, giris, kayit, cikis, basvur, basvurumVar, basvurulariTazele, profilTazele],
   );
 
   return <OturumBaglami.Provider value={deger}>{children}</OturumBaglami.Provider>;

@@ -54,3 +54,9 @@ export function gecenSure(v) {
 
 export const basHarfler = (ad) =>
   (ad ?? '?').trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toLocaleUpperCase('tr-TR');
+
+export const ROZET_ETIKETI = {
+  konferans: 'Konferans katılımcısı',
+  sunum: 'Sunum katılımcısı',
+  hackathon: 'Hackathon katılımcısı',
+};

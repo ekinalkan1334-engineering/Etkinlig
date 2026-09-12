@@ -6,12 +6,14 @@ import AnaSayfa from './sayfalar/AnaSayfa.jsx';
 import EtkinlikDetay from './sayfalar/EtkinlikDetay.jsx';
 import Basvurularim from './sayfalar/Basvurularim.jsx';
 import Giris from './sayfalar/Giris.jsx';
+import Profil from './sayfalar/Profil.jsx';
 
 function Govde({ yol }) {
   const { sayfa, id } = yoluCoz(yol);
   if (sayfa === 'etkinlik') return <EtkinlikDetay id={id} />;
   if (sayfa === 'basvurularim') return <Basvurularim />;
   if (sayfa === 'giris') return <Giris />;
+  if (sayfa === 'profil') return <Profil />;
   if (sayfa === 'ana') return <AnaSayfa />;
   return (
     <main className="detay">

@@ -9,6 +9,7 @@ const rotalar = [
   { path: '/etkinlikler/:id(\\d+)', name: 'etkinlik-detay', component: () => import('@/views/EtkinlikDetayView.vue'), meta: { baslik: 'Etkinlik detay' } },
   { path: '/etkinlikler/:id(\\d+)/duzenle', name: 'etkinlik-duzenle', component: () => import('@/views/EtkinlikFormView.vue'), meta: { baslik: 'Etkinliği düzenle' } },
   { path: '/basvurular', name: 'basvurular', component: () => import('@/views/BasvurularView.vue'), meta: { baslik: 'Başvurular' } },
+  { path: '/adaylar/:id(\\d+)', name: 'aday', component: () => import('@/views/AdayView.vue'), meta: { baslik: 'Aday' } },
   { path: '/kullanicilar', name: 'kullanicilar', component: () => import('@/views/KullanicilarView.vue'), meta: { baslik: 'Kullanıcılar', rol: 'admin' } },
   { path: '/:hepsi(.*)', redirect: { name: 'panel' } },
 ];

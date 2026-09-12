@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { useOturum } from '../oturum.jsx';
 import { Durum, DurumEtiketi, TurEtiketi } from '../parcalar/temel.jsx';
+import Yoklama from '../parcalar/Yoklama.jsx';
+import Rozetler from '../parcalar/Rozetler.jsx';
 import { BASVURU_DURUM, DURUM_TONU, ayKisa, gunNo, kalanGun, saat, tarih } from '../bicim.js';
 import { git } from '../rota.js';
 
 export default function Basvurularim() {
-  const { ogrenci, basvurular, hazir, basvurulariTazele } = useOturum();
+  const { ogrenci, basvurular, rozetler, hazir, basvurulariTazele } = useOturum();
 
   useEffect(() => {
     if (hazir && !ogrenci) git('/giris');
@@ -27,6 +29,8 @@ export default function Basvurularim() {
         <p>{basvurular.length} başvuru · {yaklasan.length} yaklaşan</p>
       </header>
 
+      <Rozetler rozetler={rozetler} />
+
       <Durum
         bos={basvurular.length === 0}
         bosBaslik="Henüz başvurun yok"
@@ -37,7 +41,7 @@ export default function Basvurularim() {
             <section className="basvuru-bolum">
               <h2>Yaklaşan</h2>
               <ul className="basvuru-listesi">
-                {yaklasan.map((b) => <BasvuruSatiri key={b.id} basvuru={b} />)}
+                {yaklasan.map((b) => <BasvuruSatiri key={b.id} basvuru={b} onKatildi={basvurulariTazele} />)}
               </ul>
             </section>
           )}
@@ -46,7 +50,7 @@ export default function Basvurularim() {
             <section className="basvuru-bolum">
               <h2>Geçmiş</h2>
               <ul className="basvuru-listesi basvuru-listesi--soluk">
-                {gecmisler.map((b) => <BasvuruSatiri key={b.id} basvuru={b} />)}
+                {gecmisler.map((b) => <BasvuruSatiri key={b.id} basvuru={b} onKatildi={basvurulariTazele} />)}
               </ul>
             </section>
           )}
@@ -56,7 +60,7 @@ export default function Basvurularim() {
   );
 }
 
-function BasvuruSatiri({ basvuru }) {
+function BasvuruSatiri({ basvuru, onKatildi }) {
   const e = basvuru.etkinlik;
   return (
     <li className="basvuru-satiri">
@@ -79,6 +83,9 @@ function BasvuruSatiri({ basvuru }) {
         <p className="basvuru-satiri__not">
           {tarih(basvuru.basvuruTarihi)} tarihinde başvuruldu · {kalanGun(e.baslangic)}
         </p>
+        {basvuru.durum === 'onaylandi' && (
+          <Yoklama etkinlikId={e.id} katildi={basvuru.katildi} onKatildi={onKatildi} />
+        )}
       </div>
 
       <a className="dugme dugme--sade" href={`#/etkinlik/${e.id}`}>Detay</a>

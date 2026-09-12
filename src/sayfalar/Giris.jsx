@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useOturum } from '../oturum.jsx';
 import { git } from '../rota.js';
+import logo from '../assets/logo-etkinlig.png';
 
 export default function Giris() {
   const { ogrenci, hazir, giris, kayit } = useOturum();
@@ -30,6 +31,17 @@ export default function Giris() {
 
   return (
     <main className="giris-sayfasi">
+      <aside className="giris-yan">
+        <img className="giris-yan__logo" src={logo} alt="etkinlig" />
+        <h2>Kampüs etkinlikleri tek hesapta.</h2>
+        <ul>
+          <li>Başvurularını tek listede takip edersin.</li>
+          <li>Aynı etkinliğe iki kez başvurmazsın.</li>
+          <li>Etkinlik sayfasında soru sorabilir, deneyimini paylaşabilirsin.</li>
+          <li>Katıldığın etkinlikler profilinde rozete dönüşür.</li>
+        </ul>
+      </aside>
+
       <div className="giris-kutu">
         <div className="giris-kutu__sekmeler" role="tablist">
           <button
@@ -97,14 +109,6 @@ export default function Giris() {
         </form>
       </div>
 
-      <aside className="giris-yan">
-        <h2>Neden hesap?</h2>
-        <ul>
-          <li>Başvurularını tek listede takip edersin.</li>
-          <li>Aynı etkinliğe iki kez başvurmazsın.</li>
-          <li>Etkinlik sayfasında soru sorabilir, deneyimini paylaşabilirsin.</li>
-        </ul>
-      </aside>
     </main>
   );
 }

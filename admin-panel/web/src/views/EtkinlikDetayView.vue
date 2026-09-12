@@ -12,21 +12,41 @@ import StatKart from '@/components/ui/StatKart.vue';
 import DurumMesaji from '@/components/ui/DurumMesaji.vue';
 import { useEtkinlikDetay } from '@/viewmodels/useEtkinlikDetay.js';
 import { useTanimlarStore } from '@/stores/tanimlar.js';
-import { useOturumStore } from '@/stores/oturum.js';
-import { etkinlikService } from '@/services';
+import { etkinlikService, yoklamaService } from '@/services';
 import { saat, sinifEtiketi, tarih, tarihUzun } from '@/utils/format.js';
 
 const route = useRoute();
 const router = useRouter();
 const tanimlar = useTanimlarStore();
-const oturum = useOturumStore();
 const vm = useEtkinlikDetay(Number(route.params.id));
 const raporAdresi = etkinlikService.raporAdresi(Number(route.params.id));
 
-const resimHatasi = ref(false);
-const tamBoyAc = (url) => { if (url) window.open(url, '_blank'); };
+// Yoklama kodu: katılımcılar etkinlikte bu kodu girerek katılımını doğrular.
+const yoklama = ref(null);
+const yoklamaIslemde = ref(false);
 
-onMounted(() => vm.yukle());
+async function yoklamaOku() {
+  try {
+    const { data } = await yoklamaService.oku(Number(route.params.id));
+    yoklama.value = data;
+  } catch { yoklama.value = null; }
+}
+
+async function yoklamaUret(elle = false) {
+  const kod = elle ? window.prompt('4 haneli kod girin (boş bırakırsanız rastgele üretilir):') : null;
+  if (elle && kod === null) return;
+  yoklamaIslemde.value = true;
+  try {
+    const { data } = await yoklamaService.uret(Number(route.params.id), kod || undefined);
+    yoklama.value = { ...(yoklama.value ?? {}), ...data };
+  } catch (e) {
+    window.alert(e.message);
+  } finally {
+    yoklamaIslemde.value = false;
+  }
+}
+
+onMounted(() => { vm.yukle(); yoklamaOku(); });
 
 const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 </script>
@@ -38,21 +58,16 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
   >
     <template #aksiyon>
       <AppButton cesit="hayalet" simge="geri" @click="router.push({ name: 'etkinlikler' })">Listeye dön</AppButton>
-      <template v-if="oturum.duzenleyebilir(vm.etkinlik.value)">
-        <a :href="raporAdresi" class="rapor-baglantisi">
-          <AppButton simge="disaAktar">Katılımcıları Excel indir</AppButton>
-        </a>
-        <AppButton simge="duzenle" @click="router.push({ name: 'etkinlik-duzenle', params: { id: route.params.id } })">
-          Düzenle
-        </AppButton>
-        <AppButton
-          v-if="vm.etkinlik.value?.durum === 'taslak'" cesit="birincil" simge="onay"
-          @click="vm.durumDegistir('yayinda')"
-        >Yayınla</AppButton>
-      </template>
-      <span v-else class="salt-okunur-rozet">
-        <AppRozet durum="taslak">Salt Okunur Görüntüleme</AppRozet>
-      </span>
+      <a :href="raporAdresi" class="rapor-baglantisi">
+        <AppButton simge="disaAktar">Katılımcıları Excel indir</AppButton>
+      </a>
+      <AppButton simge="duzenle" @click="router.push({ name: 'etkinlik-duzenle', params: { id: route.params.id } })">
+        Düzenle
+      </AppButton>
+      <AppButton
+        v-if="vm.etkinlik.value?.durum === 'taslak'" cesit="birincil" simge="onay"
+        @click="vm.durumDegistir('yayinda')"
+      >Yayınla</AppButton>
     </template>
   </AppUstCubuk>
 
@@ -77,29 +92,12 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
             <StatKart etiket="Boş kontenjan" :deger="vm.sayaclar.value.bos" :alt-bilgi="`${vm.etkinlik.value.kontenjan} kapasite`" ton="uyari" simge="kisiler" />
           </div>
 
-          <AppKart :govde-dolgusu="vm.etkinlik.value.kapakGorseli && !resimHatasi ? '0' : '20px'">
-            <div
-              v-if="vm.etkinlik.value.kapakGorseli && !resimHatasi"
-              class="kapak-sarmal"
-              title="Görseli tam boy açmak için tıklayın"
-              @click="tamBoyAc(vm.etkinlik.value.kapakGorseli)"
-            >
-              <div
-                class="kapak-arka"
-                :style="{ backgroundImage: `url('${vm.etkinlik.value.kapakGorseli}')` }"
-              />
-              <img
-                :src="vm.etkinlik.value.kapakGorseli"
-                alt="Etkinlik kapak görseli"
-                class="kapak"
-                @error="resimHatasi = true"
-              />
-              <span class="kapak-buyut-ipucu">
-                <AppIcon ad="ara" :boyut="13" />
-                <span>Tam boy aç</span>
-              </span>
-            </div>
-            <div :class="{ kapakli: vm.etkinlik.value.kapakGorseli && !resimHatasi }">
+          <AppKart :govde-dolgusu="vm.etkinlik.value.kapakGorseli ? '0' : '20px'">
+            <img
+              v-if="vm.etkinlik.value.kapakGorseli"
+              :src="vm.etkinlik.value.kapakGorseli" alt="Etkinlik kapak görseli" class="kapak"
+            />
+            <div :class="{ kapakli: vm.etkinlik.value.kapakGorseli }">
               <h2 class="bolum-basligi">Açıklama</h2>
               <p class="aciklama">{{ vm.etkinlik.value.aciklama || 'Açıklama girilmemiş.' }}</p>
             </div>
@@ -136,10 +134,20 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
                 <tbody>
                   <tr v-for="b in vm.basvurular.value" :key="b.id">
                     <td>
-                      <div class="ogrenci">
-                        <span class="avatar">{{ basHarfler(b.ogrenci.adSoyad) }}</span>
-                        <span class="ogrenci__ad">{{ b.ogrenci.adSoyad }}</span>
-                      </div>
+                      <RouterLink
+                        class="ogrenci"
+                        :to="{ name: 'aday', params: { id: b.ogrenci.id }, query: { basvuru: b.id } }"
+                        title="Aday profilini aç"
+                      >
+                        <span class="avatar">
+                          <img v-if="b.ogrenci.foto" :src="b.ogrenci.foto" :alt="b.ogrenci.adSoyad" />
+                          <template v-else>{{ basHarfler(b.ogrenci.adSoyad) }}</template>
+                        </span>
+                        <span class="ogrenci__ad">
+                          {{ b.ogrenci.adSoyad }}
+                          <em v-if="b.ogrenci.cvVar" class="cv-isaret">CV</em>
+                        </span>
+                      </RouterLink>
                     </td>
                     <td class="notr">{{ b.ogrenci.bolum ?? '—' }}</td>
                     <td class="notr">{{ sinifEtiketi(b.ogrenci.sinif) }}</td>
@@ -190,6 +198,26 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
                 <div><span>Düzenleyen</span><strong>{{ vm.etkinlik.value.sirket.ad }}</strong></div>
               </li>
             </ul>
+          </AppKart>
+
+          <AppKart baslik="Yoklama kodu">
+            <template #aksiyon>
+              <span class="ipucu">Katılımcılar bu kodu girer</span>
+            </template>
+            <div v-if="yoklama?.kod" class="yoklama">
+              <span class="yoklama__kod">{{ yoklama.kod }}</span>
+              <p class="yoklama__bilgi">{{ yoklama.katilanSayisi ?? 0 }} kişi katılımını doğruladı</p>
+              <div class="yoklama__dugmeler">
+                <AppButton cesit="hayalet" :pasif="yoklamaIslemde" @click="yoklamaUret(false)">Yenile</AppButton>
+                <AppButton cesit="hayalet" :pasif="yoklamaIslemde" @click="yoklamaUret(true)">Kendim gireyim</AppButton>
+              </div>
+            </div>
+            <div v-else class="yoklama">
+              <p class="yoklama__bilgi">Bu etkinlik için henüz kod yok.</p>
+              <AppButton cesit="birincil" :pasif="yoklamaIslemde" @click="yoklamaUret(false)">
+                {{ yoklamaIslemde ? 'Üretiliyor…' : 'Kod üret' }}
+              </AppButton>
+            </div>
           </AppKart>
 
           <AppKart baslik="Ön katılım şartları">
@@ -245,65 +273,13 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 .izgara__ana, .izgara__yan { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 @media (max-width: 1100px) { .izgara { grid-template-columns: minmax(0, 1fr); } }
 
-.kapak-sarmal {
-  position: relative;
-  width: 100%;
-  height: 180px;
-  max-height: 180px;
-  overflow: hidden;
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  background: var(--paper-2, #f7f2e8);
-  border-bottom: 1px solid var(--line, #e4dfd7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.kapak-arka {
-  position: absolute;
-  inset: -20px;
-  background-size: cover;
-  background-position: center;
-  filter: blur(24px) brightness(0.9) opacity(0.35);
-  transform: scale(1.15);
-  pointer-events: none;
-}
+.kartlar { display: flex; gap: 16px; flex-wrap: wrap; }
 .kapak {
-  position: relative;
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  z-index: 1;
-  transition: transform 0.2s ease;
+  display: block; width: 100%; max-height: 240px; object-fit: contain;
+  padding: 16px; background: var(--paper-2);
+  border-bottom: 1px solid var(--line); border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
-.kapak-sarmal:hover .kapak {
-  transform: scale(1.02);
-}
-.kapak-buyut-ipucu {
-  position: absolute;
-  bottom: 10px;
-  right: 12px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  background: rgba(31, 25, 21, 0.72);
-  backdrop-filter: blur(4px);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 2;
-  pointer-events: none;
-}
-.kapak-sarmal:hover .kapak-buyut-ipucu {
-  opacity: 1;
-}
+.kapakli { padding: 20px; }
 .bolum-basligi { font-size: 16px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 14px; }
 .aciklama { margin: 0; font-size: 14px; line-height: 1.7; color: var(--ink-2); }
 
@@ -322,7 +298,14 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 .tablo td { padding: 14px; border-top: 1px solid var(--line); }
 .sag { text-align: right; }
 .notr { font-size: 13px; color: var(--ink-2); }
-.ogrenci { display: flex; align-items: center; gap: 11px; }
+.ogrenci { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+.ogrenci:hover .ogrenci__ad { text-decoration: underline; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.cv-isaret {
+  margin-left: 7px; padding: 1px 6px; border-radius: 999px; font-style: normal;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  background: var(--sunum-tint); color: var(--sunum-deep); border: 1px solid var(--sunum-line);
+}
 .ogrenci__ad { font-size: 13.5px; font-weight: 600; }
 .avatar {
   width: 32px; height: 32px; flex: none; border-radius: 50%;
@@ -338,6 +321,16 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 .kunye div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .kunye span { font-size: 11.5px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; }
 .kunye strong { font-size: 13.5px; font-weight: 500; color: var(--ink); line-height: 1.45; }
+
+.yoklama { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.yoklama__kod {
+  font-family: var(--font-display); font-size: 38px; font-weight: 700;
+  letter-spacing: .16em; color: var(--ink); font-variant-numeric: tabular-nums;
+  padding: 8px 16px; border-radius: 12px; background: var(--paper-2); border: 1px solid var(--line);
+}
+.yoklama__bilgi { margin: 0; font-size: 13px; color: var(--ink-2); }
+.yoklama__dugmeler { display: flex; gap: 8px; flex-wrap: wrap; }
+.ipucu { font-size: 12px; color: var(--ink-3); }
 
 .sartlar { display: flex; flex-direction: column; gap: 14px; }
 .sart { display: flex; flex-direction: column; gap: 7px; }
