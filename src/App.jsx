@@ -42,7 +42,7 @@ function App() {
             <input type="password" name="sifre" placeholder="Güçlü bir şifre belirle" onChange={handleChange} required />
           </div>
 
-          <button type="submit" className="btn">Lige Kayıt Ol</button>
+          <button type="submit" className="btn">ETKİNLİGE Kayıt Ol</button>
         </form>
       </div>
     </div>
