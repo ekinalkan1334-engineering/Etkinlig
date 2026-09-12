@@ -9,7 +9,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "db:setup": "npm --prefix admin-panel/server run db:setup",
+    "server:install": "npm --prefix admin-panel/server install",
     "server:dev": "npm --prefix admin-panel/server run dev",
+    "admin:install": "npm --prefix admin-panel/web install",
     "admin:dev": "npm --prefix admin-panel/web run dev"
   },
   "dependencies": {

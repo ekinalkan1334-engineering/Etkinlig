@@ -12,6 +12,21 @@ const kok = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../db
 
 const dosyalar = ['01_schema.sql', '02_seed.sql'];
 
+// 1. İlk olarak veritabanı adı belirtmeden bağlan ve DB'yi oluştur
+const initialConn = await mysql.createConnection({
+  host: env.db.host,
+  port: env.db.port,
+  user: env.db.user,
+  password: env.db.password,
+});
+
+await initialConn.query(
+  `CREATE DATABASE IF NOT EXISTS \`${env.db.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_turkish_ci`
+);
+console.log(`✓ Veritabanı '${env.db.database}' hazır.`);
+await initialConn.end();
+
+// 2. Şimdi veritabanına bağlanıp şemaları yükle
 const conn = await mysql.createConnection({
   host: env.db.host,
   port: env.db.port,
@@ -30,3 +45,4 @@ for (const dosya of dosyalar) {
 const [[{ adet }]] = await conn.query('SELECT COUNT(*) AS adet FROM etkinlikler');
 console.log(`Hazır — ${adet} etkinlik kayıtlı.`);
 await conn.end();
+

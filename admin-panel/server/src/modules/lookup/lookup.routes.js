@@ -2,10 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { execute, queryAll } from '../../db/pool.js';
 import { asyncHandler, created, ok, parse } from '../../core/http.js';
+import { girisGerekli } from '../../core/guard.js';
 
 export const lookupRouter = Router();
 
-/** Form ekranının ihtiyaç duyduğu tüm listeler tek çağrıda. */
+/** Form ekranının ve ziyaretçilerin ihtiyaç duyduğu tüm listeler tek çağrıda. */
 lookupRouter.get('/', asyncHandler(async (req, res) => {
   const [sehirler, bolumler, sirketler] = await Promise.all([
     queryAll('SELECT id, ad, plaka_kodu AS plakaKodu FROM sehirler ORDER BY ad'),
@@ -39,7 +40,8 @@ lookupRouter.get('/', asyncHandler(async (req, res) => {
   });
 }));
 
-lookupRouter.post('/sirketler', asyncHandler(async (req, res) => {
+lookupRouter.post('/sirketler', girisGerekli, asyncHandler(async (req, res) => {
+
   const govde = parse(
     z.object({
       ad: z.string().trim().min(2).max(160),
@@ -55,7 +57,7 @@ lookupRouter.post('/sirketler', asyncHandler(async (req, res) => {
   created(res, { id: sonuc.insertId, ad: govde.ad, eposta: govde.eposta ?? null });
 }));
 
-lookupRouter.post('/bolumler', asyncHandler(async (req, res) => {
+lookupRouter.post('/bolumler', girisGerekli, asyncHandler(async (req, res) => {
   const govde = parse(
     z.object({ ad: z.string().trim().min(2).max(120), fakulte: z.string().trim().max(120).optional().nullable() }),
     req.body,
