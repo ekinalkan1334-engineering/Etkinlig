@@ -85,6 +85,27 @@ try {
     $pdo->exec("ALTER TABLE kullanicilar MODIFY COLUMN rol VARCHAR(32) NOT NULL DEFAULT 'moderator'");
 } catch (Throwable $e) {}
 
+// Şirket yöneticilerini otomatik tohumla (seed)
+try {
+    $ornekler = [
+        ['ad_soyad' => 'Deniz Aksoy',    'eposta' => 'deniz@technobridge.com.tr', 'sirket_id' => 1],
+        ['ad_soyad' => 'Selin Korkmaz',  'eposta' => 'selin@papara.com',         'sirket_id' => 2],
+        ['ad_soyad' => 'Kaan Erdem',     'eposta' => 'kaan@aselsan.com.tr',       'sirket_id' => 3],
+        ['ad_soyad' => 'Yıldız Yönetici','eposta' => 'yildiz@yildiztek.com.tr',   'sirket_id' => 4],
+        ['ad_soyad' => 'STM Yönetici',   'eposta' => 'stm@stm.com.tr',            'sirket_id' => 5],
+        ['ad_soyad' => 'Trendyol Yönetici','eposta' => 'trendyol@trendyol.com',  'sirket_id' => 6],
+    ];
+    $varsayilanHash = '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS'; // Admin1234!
+    $stmtVar = $pdo->prepare('SELECT id FROM kullanicilar WHERE eposta = ?');
+    $stmtEkle = $pdo->prepare('INSERT INTO kullanicilar (ad_soyad, eposta, parola_hash, rol, sirket_id, aktif) VALUES (?, ?, ?, ?, ?, 1)');
+    foreach ($ornekler as $o) {
+        $stmtVar->execute([$o['eposta']]);
+        if (!$stmtVar->fetch()) {
+            $stmtEkle->execute([$o['ad_soyad'], $o['eposta'], $varsayilanHash, 'sirket_admin', $o['sirket_id']]);
+        }
+    }
+} catch (Throwable $e) {}
+
 function b64UrlEncode(string $data): string {
     return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
 }
@@ -125,6 +146,7 @@ function kullaniciCevir(array $r): array {
         'eposta' => $r['eposta'],
         'rol' => $r['rol'],
         'sirketId' => isset($r['sirket_id']) && $r['sirket_id'] !== null ? (int)$r['sirket_id'] : null,
+        'sirketAdi' => $r['sirket_adi'] ?? null,
         'aktif' => (bool)$r['aktif'],
         'sonGiris' => $r['son_giris'] ?? null,
         'olusturuldu' => $r['olusturuldu'] ?? null,
@@ -145,7 +167,13 @@ function istekKullanicisi(PDO $pdo): ?array {
     }
     $veri = jwtCoz($jeton);
     if (!$veri) return null;
-    $stmt = $pdo->prepare('SELECT id, ad_soyad, eposta, rol, sirket_id, aktif, son_giris, olusturuldu FROM kullanicilar WHERE id = ?');
+    $stmt = $pdo->prepare('
+        SELECT k.id, k.ad_soyad, k.eposta, k.rol, k.sirket_id, k.aktif, k.son_giris, k.olusturuldu,
+               s.ad AS sirket_adi
+        FROM kullanicilar k
+        LEFT JOIN sirketler s ON s.id = k.sirket_id
+        WHERE k.id = ?
+    ');
     $stmt->execute([(int)$veri['sub']]);
     $u = $stmt->fetch();
     return $u ? kullaniciCevir($u) : null;
@@ -192,7 +220,13 @@ if ($method === 'POST' && $uri === '/oturum/giris') {
     $eposta = trim((string)($girdi['eposta'] ?? ''));
     $parola = (string)($girdi['parola'] ?? '');
     
-    $stmt = $pdo->prepare('SELECT id, ad_soyad, eposta, parola_hash, rol, sirket_id, aktif, son_giris, olusturuldu FROM kullanicilar WHERE eposta = ?');
+    $stmt = $pdo->prepare('
+        SELECT k.id, k.ad_soyad, k.eposta, k.parola_hash, k.rol, k.sirket_id, k.aktif, k.son_giris, k.olusturuldu,
+               s.ad AS sirket_adi
+        FROM kullanicilar k
+        LEFT JOIN sirketler s ON s.id = k.sirket_id
+        WHERE k.eposta = ?
+    ');
     $stmt->execute([$eposta]);
     $u = $stmt->fetch();
     
@@ -216,7 +250,7 @@ if ($method === 'POST' && $uri === '/oturum/giris') {
         'samesite' => 'Lax'
     ]);
     
-    basariDondur(['kullanici' => $kullanici, 'jeton' => $jeton]);
+    basariDondur($kullanici);
 }
 
 // 4. Ben (Oturumdaki Kullanıcı)
@@ -756,10 +790,166 @@ if ($method === 'PATCH' && preg_match('#^/basvurular/(\d+)/durum$#', $uri, $m)) 
 // 16. Kullanıcılar Listesi
 if ($method === 'GET' && $uri === '/kullanicilar') {
     $u = girisZorunlu($pdo);
-    if ($u['rol'] !== 'admin') hataDondur(403, 'yetki_yok', 'Bu sayfayı yalnızca yönetici görüntüleyebilir');
+    if ($u['rol'] !== 'admin') hataDondur(403, 'yetki_yok', 'Bu sayfayı yalnızca genel yönetici görüntüleyebilir');
     
-    $satirlar = $pdo->query('SELECT id, ad_soyad, eposta, rol, sirket_id, aktif, son_giris, olusturuldu FROM kullanicilar ORDER BY ad_soyad')->fetchAll();
-    basariDondur(array_map('kullaniciCevir', $satirlar));
+    $satirlar = $pdo->query('
+        SELECT k.id, k.ad_soyad, k.eposta, k.rol, k.sirket_id, k.aktif, k.son_giris, k.olusturuldu,
+               s.ad AS sirket_adi
+        FROM kullanicilar k
+        LEFT JOIN sirketler s ON s.id = k.sirket_id
+        ORDER BY k.ad_soyad
+    ')->fetchAll();
+    
+    $sonuc = array_map(function($r) {
+        $k = kullaniciCevir($r);
+        $k['sirketAdi'] = $r['sirket_adi'] ?? null;
+        return $k;
+    }, $satirlar);
+    
+    basariDondur($sonuc);
+}
+
+// 17. Yeni Kullanıcı Oluştur
+if ($method === 'POST' && $uri === '/kullanicilar') {
+    $u = girisZorunlu($pdo);
+    if ($u['rol'] !== 'admin') hataDondur(403, 'yetki_yok', 'Yalnızca genel yönetici yeni kullanıcı ekleyebilir');
+    
+    $adSoyad = trim((string)($girdi['adSoyad'] ?? ''));
+    $eposta = trim((string)($girdi['eposta'] ?? ''));
+    $parola = (string)($girdi['parola'] ?? '');
+    $rol = ($girdi['rol'] ?? 'sirket_admin') === 'admin' ? 'admin' : 'sirket_admin';
+    $sirketId = ($rol === 'sirket_admin') ? (int)($girdi['sirketId'] ?? 0) : null;
+    
+    if (!$adSoyad || !$eposta || strlen($parola) < 6) {
+        hataDondur(400, 'dogrulama_hatasi', 'Ad soyad, geçerli e-posta ve en az 6 karakter parola zorunludur');
+    }
+    if ($rol === 'sirket_admin' && !$sirketId) {
+        hataDondur(400, 'dogrulama_hatasi', 'Şirket yöneticisi için bir şirket seçmelisiniz');
+    }
+    
+    $stmtEposta = $pdo->prepare('SELECT id FROM kullanicilar WHERE eposta = ?');
+    $stmtEposta->execute([$eposta]);
+    if ($stmtEposta->fetch()) {
+        hataDondur(409, 'kayit_mevcut', 'Bu e-posta adresi zaten kullanımda');
+    }
+    
+    $parolaHash = password_hash($parola, PASSWORD_BCRYPT);
+    $stmtInsert = $pdo->prepare('INSERT INTO kullanicilar (ad_soyad, eposta, parola_hash, rol, sirket_id, aktif) VALUES (?, ?, ?, ?, ?, 1)');
+    $stmtInsert->execute([$adSoyad, $eposta, $parolaHash, $rol, $sirketId]);
+    $yeniId = (int)$pdo->lastInsertId();
+    
+    basariDondur(['id' => $yeniId, 'adSoyad' => $adSoyad, 'eposta' => $eposta, 'rol' => $rol, 'sirketId' => $sirketId], null, 201);
+}
+
+// 18. Kullanıcı Güncelle (Aktiflik, Ad vb.)
+if ($method === 'PATCH' && preg_match('#^/kullanicilar/(\d+)$#', $uri, $m)) {
+    $u = girisZorunlu($pdo);
+    if ($u['rol'] !== 'admin') hataDondur(403, 'yetki_yok', 'Yalnızca genel yönetici kullanıcı güncelleyebilir');
+    $id = (int)$m[1];
+    
+    $set = [];
+    $params = [];
+    if (isset($girdi['aktif'])) {
+        $set[] = 'aktif = ?';
+        $params[] = (int)$girdi['aktif'];
+    }
+    if (isset($girdi['adSoyad'])) {
+        $set[] = 'ad_soyad = ?';
+        $params[] = trim((string)$girdi['adSoyad']);
+    }
+    if (isset($girdi['rol'])) {
+        $set[] = 'rol = ?';
+        $params[] = ($girdi['rol'] === 'admin') ? 'admin' : 'sirket_admin';
+    }
+    if (isset($girdi['sirketId'])) {
+        $set[] = 'sirket_id = ?';
+        $params[] = $girdi['sirketId'] ? (int)$girdi['sirketId'] : null;
+    }
+    
+    if ($set) {
+        $params[] = $id;
+        $pdo->prepare('UPDATE kullanicilar SET ' . implode(', ', $set) . ' WHERE id = ?')->execute($params);
+    }
+    basariDondur(['id' => $id, 'guncellendi' => true]);
+}
+
+// 19. Kullanıcı Parola Sıfırla
+if ($method === 'PATCH' && preg_match('#^/kullanicilar/(\d+)/parola$#', $uri, $m)) {
+    $u = girisZorunlu($pdo);
+    if ($u['rol'] !== 'admin') hataDondur(403, 'yetki_yok', 'Yalnızca genel yönetici parola sıfırlayabilir');
+    $id = (int)$m[1];
+    $yeniParola = (string)($girdi['yeniParola'] ?? '');
+    if (strlen($yeniParola) < 6) {
+        hataDondur(400, 'gecersiz_parola', 'Parola en az 6 karakter olmalıdır');
+    }
+    $hash = password_hash($yeniParola, PASSWORD_BCRYPT);
+    $pdo->prepare('UPDATE kullanicilar SET parola_hash = ? WHERE id = ?')->execute([$hash, $id]);
+    basariDondur(['id' => $id, 'parolaGuncellendi' => true]);
+}
+
+// 20. Kullanıcı Sil
+if ($method === 'DELETE' && preg_match('#^/kullanicilar/(\d+)$#', $uri, $m)) {
+    $u = girisZorunlu($pdo);
+    if ($u['rol'] !== 'admin') hataDondur(403, 'yetki_yok', 'Yalnızca genel yönetici kullanıcı silebilir');
+    $id = (int)$m[1];
+    if ($id === $u['id']) {
+        hataDondur(400, 'kendini_silemez', 'Oturum açıkken kendi hesabınızı silemezsiniz');
+    }
+    $pdo->prepare('DELETE FROM kullanicilar WHERE id = ?')->execute([$id]);
+    basariDondur(['id' => $id, 'silindi' => true]);
+}
+
+// 21. Görsel Yükleme (POST /gorseller)
+if ($method === 'POST' && $uri === '/gorseller') {
+    girisZorunlu($pdo);
+    
+    if (empty($_FILES['gorsel']) || $_FILES['gorsel']['error'] !== UPLOAD_ERR_OK) {
+        $kod = $_FILES['gorsel']['error'] ?? 'yok';
+        $mesaj = ($kod === UPLOAD_ERR_INI_SIZE || $kod === UPLOAD_ERR_FORM_SIZE)
+            ? 'Görsel dosya boyutu çok büyük (en fazla 5 MB)'
+            : 'Görsel dosyası yüklenemedi';
+        hataDondur(400, 'gecersiz_dosya', $mesaj);
+    }
+    
+    $dosya = $_FILES['gorsel'];
+    if ($dosya['size'] > 5 * 1024 * 1024) {
+        hataDondur(400, 'boyut_asimi', 'Görsel en fazla 5 MB olabilir');
+    }
+    
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($dosya['tmp_name']);
+    $uzantilar = [
+        'image/jpeg' => '.jpg',
+        'image/pjpeg' => '.jpg',
+        'image/png'  => '.png',
+        'image/webp' => '.webp',
+        'image/gif'  => '.gif',
+    ];
+    
+    if (!isset($uzantilar[$mime])) {
+        hataDondur(400, 'gecersiz_tur', 'Yalnızca JPEG, PNG veya WEBP görseli yükleyebilirsiniz');
+    }
+    
+    $uzanti = $uzantilar[$mime];
+    // Dosyaları /etkinlig/yuklemeler klasörüne kaydet
+    $klasor = dirname(__DIR__) . '/yuklemeler';
+    if (!is_dir($klasor)) {
+        @mkdir($klasor, 0777, true);
+    }
+    
+    $dosyaAdi = date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . $uzanti;
+    $hedefYol = $klasor . '/' . $dosyaAdi;
+    
+    if (!move_uploaded_file($dosya['tmp_name'], $hedefYol)) {
+        hataDondur(500, 'kayit_hatasi', 'Görsel sunucuya kaydedilemedi, lütfen klasör yazma izinlerini kontrol edin');
+    }
+    
+    $webYolu = '/etkinlig/yuklemeler/' . $dosyaAdi;
+    basariDondur([
+        'yol' => $webYolu,
+        'boyut' => $dosya['size'],
+        'tip' => $mime,
+    ], null, 201);
 }
 
 // Hiçbir rotaya uymadıysa 404

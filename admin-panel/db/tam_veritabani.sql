@@ -49,13 +49,17 @@ CREATE TABLE kullanicilar (
   ad_soyad      VARCHAR(120) NOT NULL,
   eposta        VARCHAR(160) NOT NULL,
   parola_hash   VARCHAR(255) NOT NULL,
-  rol           ENUM('admin','moderator') NOT NULL DEFAULT 'moderator',
+  rol           VARCHAR(32)  NOT NULL DEFAULT 'moderator',
+  sirket_id     INT UNSIGNED NULL,
   aktif         TINYINT(1)   NOT NULL DEFAULT 1,
   son_giris     DATETIME     NULL,
   olusturuldu   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_kullanicilar_eposta (eposta)
+  UNIQUE KEY uq_kullanicilar_eposta (eposta),
+  KEY ix_kullanicilar_sirket (sirket_id),
+  CONSTRAINT fk_kullanicilar_sirket FOREIGN KEY (sirket_id) REFERENCES sirketler(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci;
+
 
 CREATE TABLE ogrenciler (
   id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -215,10 +219,16 @@ INSERT INTO sirketler (ad, eposta, web_sitesi) VALUES
   ('STM Savunma Teknolojileri','etkinlik@stm.com.tr','stm.com.tr'),
   ('Trendyol Group','campus@trendyol.com','trendyol.com');
 
--- Varsayılan yönetici — giriş: admin@etkinlig.local / Admin1234!
+-- Varsayılan yöneticiler — tüm hesapların parolası: Admin1234!
 -- İlk girişten sonra Kullanıcılar ekranından parolayı değiştirin.
-INSERT INTO kullanicilar (ad_soyad, eposta, parola_hash, rol, aktif) VALUES
-  ('M. Emir Ata','admin@etkinlig.local','$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','admin',1);
+INSERT INTO kullanicilar (ad_soyad, eposta, parola_hash, rol, sirket_id, aktif) VALUES
+  ('M. Emir Ata',       'admin@etkinlig.local',       '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','admin',       NULL, 1),
+  ('Deniz Aksoy',      'deniz@technobridge.com.tr',  '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','sirket_admin',1,    1),
+  ('Selin Korkmaz',    'selin@papara.com',           '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','sirket_admin',2,    1),
+  ('Kaan Erdem',       'kaan@aselsan.com.tr',         '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','sirket_admin',3,    1),
+  ('Yıldız Yönetici',  'yildiz@yildiztek.com.tr',    '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','sirket_admin',4,    1),
+  ('STM Yönetici',     'stm@stm.com.tr',             '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','sirket_admin',5,    1),
+  ('Trendyol Yönetici','trendyol@trendyol.com',       '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','sirket_admin',6,    1);
 
 INSERT INTO ogrenciler (ad_soyad, eposta, ogrenci_no, universite, bolum_id, ogrenim_duzeyi, sinif, not_ortalamasi) VALUES
   ('Zeynep Kaya','zeynep.kaya@ogr.edu.tr','20210101','Çankırı Karatekin Üniversitesi',1,'lisans',4,3.21),

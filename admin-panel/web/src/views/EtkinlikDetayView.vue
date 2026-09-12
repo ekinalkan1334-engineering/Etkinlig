@@ -12,12 +12,14 @@ import StatKart from '@/components/ui/StatKart.vue';
 import DurumMesaji from '@/components/ui/DurumMesaji.vue';
 import { useEtkinlikDetay } from '@/viewmodels/useEtkinlikDetay.js';
 import { useTanimlarStore } from '@/stores/tanimlar.js';
+import { useOturumStore } from '@/stores/oturum.js';
 import { etkinlikService } from '@/services';
 import { saat, sinifEtiketi, tarih, tarihUzun } from '@/utils/format.js';
 
 const route = useRoute();
 const router = useRouter();
 const tanimlar = useTanimlarStore();
+const oturum = useOturumStore();
 const vm = useEtkinlikDetay(Number(route.params.id));
 const raporAdresi = etkinlikService.raporAdresi(Number(route.params.id));
 
@@ -33,16 +35,21 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
   >
     <template #aksiyon>
       <AppButton cesit="hayalet" simge="geri" @click="router.push({ name: 'etkinlikler' })">Listeye dön</AppButton>
-      <a :href="raporAdresi" class="rapor-baglantisi">
-        <AppButton simge="disaAktar">Katılımcıları Excel indir</AppButton>
-      </a>
-      <AppButton simge="duzenle" @click="router.push({ name: 'etkinlik-duzenle', params: { id: route.params.id } })">
-        Düzenle
-      </AppButton>
-      <AppButton
-        v-if="vm.etkinlik.value?.durum === 'taslak'" cesit="birincil" simge="onay"
-        @click="vm.durumDegistir('yayinda')"
-      >Yayınla</AppButton>
+      <template v-if="oturum.duzenleyebilir(vm.etkinlik.value)">
+        <a :href="raporAdresi" class="rapor-baglantisi">
+          <AppButton simge="disaAktar">Katılımcıları Excel indir</AppButton>
+        </a>
+        <AppButton simge="duzenle" @click="router.push({ name: 'etkinlik-duzenle', params: { id: route.params.id } })">
+          Düzenle
+        </AppButton>
+        <AppButton
+          v-if="vm.etkinlik.value?.durum === 'taslak'" cesit="birincil" simge="onay"
+          @click="vm.durumDegistir('yayinda')"
+        >Yayınla</AppButton>
+      </template>
+      <span v-else class="salt-okunur-rozet">
+        <AppRozet durum="taslak">Salt Okunur Görüntüleme</AppRozet>
+      </span>
     </template>
   </AppUstCubuk>
 

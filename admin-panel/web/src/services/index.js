@@ -17,7 +17,8 @@ export const gorselService = {
   async yukle(dosya) {
     const govde = new FormData();
     govde.append('gorsel', dosya);
-    const yanit = await fetch(`${import.meta.env.VITE_API_URL ?? '/api'}/gorseller`, {
+    const temel = import.meta.env.VITE_API_URL ?? '/etkinlig/api';
+    const yanit = await fetch(`${temel}/gorseller`, {
       method: 'POST',
       credentials: 'include',
       body: govde,

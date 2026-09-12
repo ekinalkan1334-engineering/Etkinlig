@@ -107,14 +107,19 @@ async function sil(e) {
               <td><DurumRozeti :durum="e.durum" /></td>
               <td class="sag">
                 <div class="islemler">
-                  <a :href="etkinlikService.raporAdresi(e.id)" title="Katılımcıları Excel indir">
-                    <AppButton yalniz-simge simge="disaAktar" />
-                  </a>
-                  <AppButton
-                    yalniz-simge simge="duzenle" title="Düzenle"
-                    @click="router.push({ name: 'etkinlik-duzenle', params: { id: e.id } })"
-                  />
-                  <AppButton yalniz-simge simge="cop" cesit="tehlike" title="Sil" @click="sil(e)" />
+                  <template v-if="oturum.duzenleyebilir(e)">
+                    <a :href="etkinlikService.raporAdresi(e.id)" title="Katılımcıları Excel indir">
+                      <AppButton yalniz-simge simge="disaAktar" />
+                    </a>
+                    <AppButton
+                      yalniz-simge simge="duzenle" title="Düzenle"
+                      @click="router.push({ name: 'etkinlik-duzenle', params: { id: e.id } })"
+                    />
+                    <AppButton yalniz-simge simge="cop" cesit="tehlike" title="Sil" @click="sil(e)" />
+                  </template>
+                  <span v-else class="salt-okunur" title="Yalnızca kendi şirketinizin etkinliklerini düzenleyebilirsiniz">
+                    <span class="salt-okunur-etiket">Salt Okunur</span>
+                  </span>
                 </div>
               </td>
             </tr>
@@ -160,6 +165,17 @@ async function sil(e) {
 .hucre__baslik { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
 .hucre__baslik--sade { font-weight: 500; font-size: 13.5px; }
 .hucre__alt { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
-.islemler { display: inline-flex; gap: 6px; }
+.islemler { display: inline-flex; gap: 6px; align-items: center; }
 .islemler :deep(.btn) { width: 32px; height: 32px; border-radius: var(--r-sm); }
+.salt-okunur-etiket {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+  background: var(--surface-2, #f5f3ef);
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px dashed var(--line);
+  white-space: nowrap;
+}
 </style>

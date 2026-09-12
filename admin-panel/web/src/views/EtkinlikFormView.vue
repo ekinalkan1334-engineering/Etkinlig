@@ -22,13 +22,26 @@ const oturum = useOturumStore();
 const vm = useEtkinlikForm();
 
 const duzenleme = computed(() => !!route.params.id);
+const seciliSirketAdi = computed(() =>
+  tanimlar.sirketler.find((s) => Number(s.id) === Number(vm.model.sirketId))?.ad,
+);
 
 onMounted(async () => {
-  await tanimlar.yukle();
-  // Şirket admininde şirket sorulmaz, oturumdan gelir.
-  if (!oturum.admin) vm.model.sirketId = oturum.kullanici.sirketId;
+  await Promise.all([
+    tanimlar.yukle(true),
+    oturum.baslat(),
+  ]);
+  // Şirket admininde şirket sorulmaz, kendi şirket ID'si otomatik kilitlenir.
+  if (!oturum.admin && oturum.kullanici?.sirketId) {
+    vm.model.sirketId = Number(oturum.kullanici.sirketId);
+  }
   if (duzenleme.value) {
     const { data } = await etkinlikService.bul(Number(route.params.id));
+    if (!oturum.duzenleyebilir(data)) {
+      alert('Yalnızca kendi şirketinizin etkinliklerini düzenleyebilirsiniz.');
+      router.replace({ name: 'etkinlikler' });
+      return;
+    }
     vm.doldur(data);
   }
 });
@@ -81,20 +94,23 @@ async function kaydet(durum) {
             </FormAlani>
 
             <div class="ikili">
-              <!-- Şirket admininde seçim yok: etkinlik kendi şirketi adına açılır. -->
+              <!-- Şirket / Kurum: Admin tüm şirketleri seçebilir, şirket admini kendi şirketine kilitlidir -->
               <FormAlani v-if="oturum.admin" etiket="Şirket / kurum" zorunlu :hata="vm.hatalar.value.sirketId">
                 <template #default="{ hatali }">
                   <select v-model="vm.model.sirketId" :aria-invalid="hatali">
-                    <option value="">Şirket seçin</option>
+                    <option value="" disabled>Şirket seçiniz…</option>
                     <option v-for="s in tanimlar.sirketler" :key="s.id" :value="s.id">{{ s.ad }}</option>
                   </select>
                 </template>
               </FormAlani>
               <FormAlani v-else etiket="Şirket / kurum">
-                <div class="sabit-alan">
-                  <AppIcon ad="bina" :boyut="16" />
-                  <span>{{ oturum.sirketAdi }}</span>
-                </div>
+                <template #default>
+                  <div class="sabit-alan">
+                    <AppIcon ad="bina" :boyut="16" />
+                    <span>{{ oturum.sirketAdi || seciliSirketAdi || 'Şirketiniz' }}</span>
+                    <AppRozet durum="taslak" style="margin-left: auto;">Kilitli</AppRozet>
+                  </div>
+                </template>
               </FormAlani>
 
               <FormAlani etiket="İletişim e-postası" :hata="vm.hatalar.value.iletisimEpostasi">

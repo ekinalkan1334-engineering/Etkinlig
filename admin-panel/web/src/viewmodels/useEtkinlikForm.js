@@ -89,7 +89,7 @@ export function useEtkinlikForm() {
       baslik: detay.baslik,
       aciklama: detay.aciklama ?? '',
       tur: detay.tur,
-      sirketId: detay.sirket.id,
+      sirketId: Number(detay.sirket?.id ?? detay.sirketId ?? detay.sirket_id ?? 0) || '',
       iletisimEpostasi: detay.iletisimEpostasi ?? '',
       sehirId: detay.sehir.id,
       ilce: detay.ilce ?? '',
