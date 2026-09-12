@@ -13,11 +13,29 @@ function App() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Şifre frontend tarafında sadece state içinde tutulur.
-    // Backend'e gönderilirken görünmez, veritabanına da hashlenerek (şifrelenerek) kaydedilecek.
-    alert("Kayıt Başarılı! Şifreniz gizli tutuluyor.");
+    try {
+      const response = await fetch("http://127.0.0.1:8000/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert("Kayıt Başarılı! Şifreniz arka planda güvenle hash'lendi.");
+        setFormData({ adSoyad: "", email: "", sifre: "" });
+      } else {
+        alert("Kayıt sırasında bir hata oluştu!");
+      }
+    } catch (error) {
+      console.error("Hata:", error);
+      alert("Sunucuya bağlanılamadı. Backend çalışıyor mu kontrol edin.");
+    }
   };
 
   return (
