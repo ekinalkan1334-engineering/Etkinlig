@@ -661,6 +661,180 @@ if ($method === 'DELETE' && preg_match('#^/etkinlikler/(\d+)$#', $uri, $m)) {
     exit;
 }
 
+// 12.1 Katılımcılar Excel / CSV Raporu
+if ($method === 'GET' && preg_match('#^/etkinlikler/(\d+)/katilimcilar(\.(xlsx|csv|xls))?$#', $uri, $m)) {
+    $u = girisZorunlu($pdo);
+    $id = (int)$m[1];
+    
+    // Etkinlik ve yetki kontrolü
+    $stmtE = $pdo->prepare('SELECT e.id, e.kod, e.baslik, e.sirket_id, s.ad AS sirket_adi FROM etkinlikler e JOIN sirketler s ON s.id = e.sirket_id WHERE e.id = ?');
+    $stmtE->execute([$id]);
+    $etkinlik = $stmtE->fetch();
+    if (!$etkinlik) hataDondur(404, 'bulunamadi', 'Etkinlik bulunamadı');
+    
+    if ($u['rol'] !== 'admin' && $u['sirketId'] && (int)$etkinlik['sirket_id'] !== (int)$u['sirketId']) {
+        hataDondur(403, 'yetki_yok', 'Başka bir şirkete ait etkinliğin raporunu indiremezsiniz');
+    }
+    
+    // Katılımcıları çek
+    $stmtK = $pdo->prepare("
+      SELECT b.id, b.durum, b.basvuru_tarihi, b.karar_tarihi, b.notlar,
+             o.ad_soyad, o.eposta, o.ogrenci_no, o.universite, o.ogrenim_duzeyi, o.sinif, o.not_ortalamasi,
+             bl.ad AS bolum_adi
+      FROM basvurular b
+      JOIN ogrenciler o ON o.id = b.ogrenci_id
+      LEFT JOIN bolumler bl ON bl.id = o.bolum_id
+      WHERE b.etkinlik_id = ?
+      ORDER BY b.basvuru_tarihi ASC
+    ");
+    $stmtK->execute([$id]);
+    $katilimcilar = $stmtK->fetchAll();
+    
+    $durumlar = [
+        'onaylandi' => 'Onaylandı',
+        'beklemede' => 'Beklemede',
+        'reddedildi' => 'Reddedildi',
+        'yedek' => 'Yedek',
+        'iptal' => 'İptal'
+    ];
+    $siniflar = [
+        0 => 'Hazırlık', 1 => '1. sınıf', 2 => '2. sınıf', 3 => '3. sınıf', 4 => '4. sınıf', 5 => 'Mezun'
+    ];
+    $duzeyler = [
+        'on_lisans' => 'Ön lisans', 'lisans' => 'Lisans', 'yuksek_lisans' => 'Yüksek lisans', 'doktora' => 'Doktora'
+    ];
+
+    $harita = ['ç'=>'c','Ç'=>'C','ğ'=>'g','Ğ'=>'G','ı'=>'i','İ'=>'I','ö'=>'o','Ö'=>'O','ş'=>'s','Ş'=>'S','ü'=>'u','Ü'=>'U'];
+    $sadeBaslik = preg_replace('/[^a-zA-Z0-9]+/', '-', strtr($etkinlik['baslik'], $harita));
+    $sadeBaslik = trim($sadeBaslik, '-');
+    $dosyaAdi = sprintf("%s_%s_katilimcilar_%s.xlsx", $etkinlik['kod'], substr($sadeBaslik, 0, 40), date('Y-m-d'));
+
+    // Sütun başlıkları
+    $basliklar = [
+        'Sıra', 'Ad Soyad', 'E-posta', 'Öğrenci No', 'Üniversite', 'Bölüm',
+        'Öğrenim Düzeyi', 'Sınıf', 'Not Ortalaması', 'Başvuru Tarihi', 'Durum', 'Karar Tarihi', 'Notlar'
+    ];
+    
+    $satirlar = [];
+    $sira = 1;
+    foreach ($katilimcilar as $k) {
+        $satirlar[] = [
+            $sira++,
+            $k['ad_soyad'],
+            $k['eposta'],
+            $k['ogrenci_no'] ?? '-',
+            $k['universite'] ?? '-',
+            $k['bolum_adi'] ?? '-',
+            $duzeyler[$k['ogrenim_duzeyi']] ?? ($k['ogrenim_duzeyi'] ?? '-'),
+            $siniflar[$k['sinif']] ?? ($k['sinif'] !== null ? $k['sinif'] . '. sınıf' : '-'),
+            $k['not_ortalamasi'] !== null ? number_format((float)$k['not_ortalamasi'], 2) : '-',
+            $k['basvuru_tarihi'] ? date('d.m.Y H:i', strtotime($k['basvuru_tarihi'])) : '-',
+            $durumlar[$k['durum']] ?? $k['durum'],
+            $k['karar_tarihi'] ? date('d.m.Y H:i', strtotime($k['karar_tarihi'])) : '-',
+            $k['notlar'] ?? ''
+        ];
+    }
+    
+    // ZipArchive ile gerçek XLSX üret
+    if (class_exists('ZipArchive')) {
+        $tmpZip = tempnam(sys_get_temp_dir(), 'xlsx_');
+        $zip = new ZipArchive();
+        if ($zip->open($tmpZip, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
+            $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>');
+
+            $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>');
+
+            $zip->addFromString('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>');
+
+            $zip->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Katilimcilar" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>');
+
+            $zip->addFromString('xl/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2">
+    <font><name val="Calibri"/><sz val="11"/></font>
+    <font><b/><name val="Calibri"/><sz val="11"/><color rgb="FFFFFFFF"/></font>
+  </fonts>
+  <fills count="3">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFC9593D"/></patternFill></fill>
+  </fills>
+  <borders count="1"><border><left/><right/><top/><bottom/></border></borders>
+  <cellXfs count="2">
+    <xf fontId="0" fillId="0" borderId="0"/>
+    <xf fontId="1" fillId="2" borderId="0" applyFont="1" applyFill="1"/>
+  </cellXfs>
+</styleSheet>');
+
+            $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
+            $sheetXml .= '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
+            $sheetXml .= '<row r="1">';
+            foreach ($basliklar as $cIdx => $b) {
+                $colLetter = chr(65 + $cIdx);
+                $escaped = htmlspecialchars((string)$b, ENT_XML1, 'UTF-8');
+                $sheetXml .= '<c r="' . $colLetter . '1" t="inlineStr" s="1"><is><t>' . $escaped . '</t></is></c>';
+            }
+            $sheetXml .= '</row>';
+            
+            $rowNum = 2;
+            foreach ($satirlar as $row) {
+                $sheetXml .= '<row r="' . $rowNum . '">';
+                foreach ($row as $cIdx => $val) {
+                    $colLetter = chr(65 + $cIdx);
+                    $escaped = htmlspecialchars((string)$val, ENT_XML1, 'UTF-8');
+                    $sheetXml .= '<c r="' . $colLetter . $rowNum . '" t="inlineStr"><is><t>' . $escaped . '</t></is></c>';
+                }
+                $sheetXml .= '</row>';
+                $rowNum++;
+            }
+            $sheetXml .= '</sheetData></worksheet>';
+            $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
+            $zip->close();
+            
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="' . $dosyaAdi . '"');
+            header('Content-Length: ' . filesize($tmpZip));
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            readfile($tmpZip);
+            @unlink($tmpZip);
+            exit;
+        }
+    }
+    
+    // Fallback: CSV with UTF-8 BOM
+    $csvAdi = str_replace('.xlsx', '.csv', $dosyaAdi);
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $csvAdi . '"');
+    header('Cache-Control: no-cache, no-store, must-revalidate');
+    echo "\xEF\xBB\xBF";
+    $out = fopen('php://output', 'w');
+    fputcsv($out, $basliklar, ';');
+    foreach ($satirlar as $row) {
+        fputcsv($out, $row, ';');
+    }
+    fclose($out);
+    exit;
+}
+
 // 13. İstatistik Paneli
 if ($method === 'GET' && $uri === '/istatistik/panel') {
     $u = girisZorunlu($pdo);
@@ -1035,6 +1209,188 @@ if ($method === 'GET' && preg_match('#^/gorseller/([^/]+)$#', $uri, $m)) {
     header('Cache-Control: public, max-age=31536000');
     readfile($bulundu);
     exit;
+}
+
+// 23. Açık Vitrin - Etkinlikler Listesi (GET /acik/etkinlikler)
+if ($method === 'GET' && $uri === '/acik/etkinlikler') {
+    $where = ["e.durum = 'yayinda'"];
+    $params = [];
+    
+    if (!empty($_GET['arama'])) {
+        $where[] = '(e.baslik LIKE ? OR s.ad LIKE ? OR e.kod LIKE ?)';
+        $arama = '%' . $_GET['arama'] . '%';
+        $params[] = $arama; $params[] = $arama; $params[] = $arama;
+    }
+    if (!empty($_GET['tur'])) {
+        $where[] = 'e.tur = ?';
+        $params[] = $_GET['tur'];
+    }
+    if (!empty($_GET['sehir'])) {
+        $where[] = 'c.ad = ?';
+        $params[] = $_GET['sehir'];
+    }
+    
+    $whereSql = 'WHERE ' . implode(' AND ', $where);
+    $limit = max(1, min(100, (int)($_GET['limit'] ?? 24)));
+    
+    $sql = "
+      SELECT e.id, e.kod, e.baslik, e.tur, e.baslangic, e.bitis, e.son_basvuru,
+             e.ilce, e.adres, e.kontenjan, e.kapak_gorseli, e.basvuruya_acik,
+             s.ad AS sirket_adi, c.ad AS sehir_adi,
+             COALESCE(b.onayli, 0) AS onayli
+      FROM etkinlikler e
+      JOIN sirketler s ON s.id = e.sirket_id
+      JOIN sehirler  c ON c.id = e.sehir_id
+      LEFT JOIN (
+        SELECT etkinlik_id, SUM(durum = 'onaylandi') AS onayli
+        FROM basvurular GROUP BY etkinlik_id
+      ) b ON b.etkinlik_id = e.id
+      $whereSql
+      ORDER BY e.baslangic ASC
+      LIMIT $limit
+    ";
+    
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $satirlar = $stmt->fetchAll();
+    
+    $kayitlar = array_map(function($r) {
+        $kontenjan = (int)$r['kontenjan'];
+        $onayli = (int)$r['onayli'];
+        $kalan = max(0, $kontenjan - $onayli);
+        return [
+            'id' => (int)$r['id'],
+            'kod' => $r['kod'],
+            'baslik' => $r['baslik'],
+            'tur' => $r['tur'],
+            'baslangic' => $r['baslangic'],
+            'bitis' => $r['bitis'],
+            'sonBasvuru' => $r['son_basvuru'],
+            'sirket' => $r['sirket_adi'],
+            'sehir' => $r['sehir_adi'],
+            'ilce' => $r['ilce'],
+            'gorsel' => $r['kapak_gorseli'],
+            'kontenjan' => $kontenjan,
+            'katilimci' => $onayli,
+            'kalanKontenjan' => $kalan,
+            'basvuruyaAcik' => (bool)$r['basvuruya_acik'] && $kalan > 0,
+        ];
+    }, $satirlar);
+    
+    basariDondur($kayitlar);
+}
+
+// 24. Açık Vitrin - Tekil Etkinlik Detayı (GET /acik/etkinlikler/{id})
+if ($method === 'GET' && preg_match('#^/acik/etkinlikler/(\d+)$#', $uri, $m)) {
+    $id = (int)$m[1];
+    $stmt = $pdo->prepare("
+      SELECT e.id, e.kod, e.baslik, e.aciklama, e.tur, e.baslangic, e.bitis, e.son_basvuru,
+             e.ilce, e.adres, e.kontenjan, e.kapak_gorseli, e.basvuruya_acik,
+             e.sart_ogrenim_duzeyi, e.sart_min_ortalama, e.sart_belge_zorunlu,
+             s.ad AS sirket_adi, c.ad AS sehir_adi,
+             COALESCE(b.onayli, 0) AS onayli
+      FROM etkinlikler e
+      JOIN sirketler s ON s.id = e.sirket_id
+      JOIN sehirler  c ON c.id = e.sehir_id
+      LEFT JOIN (
+        SELECT etkinlik_id, SUM(durum = 'onaylandi') AS onayli
+        FROM basvurular GROUP BY etkinlik_id
+      ) b ON b.etkinlik_id = e.id
+      WHERE e.id = ? AND e.durum = 'yayinda'
+    ");
+    $stmt->execute([$id]);
+    $r = $stmt->fetch();
+    if (!$r) hataDondur(404, 'bulunamadi', 'Etkinlik bulunamadı veya henüz yayında değil');
+    
+    $stmtSinif = $pdo->prepare('SELECT sinif FROM etkinlik_siniflari WHERE etkinlik_id = ? ORDER BY sinif');
+    $stmtSinif->execute([$id]);
+    $siniflar = array_map('intval', $stmtSinif->fetchAll(PDO::FETCH_COLUMN));
+    
+    $stmtBolum = $pdo->prepare('SELECT b.ad FROM etkinlik_bolumleri eb JOIN bolumler b ON b.id = eb.bolum_id WHERE eb.etkinlik_id = ?');
+    $stmtBolum->execute([$id]);
+    $bolumler = $stmtBolum->fetchAll(PDO::FETCH_COLUMN);
+    
+    $kontenjan = (int)$r['kontenjan'];
+    $onayli = (int)$r['onayli'];
+    $kalan = max(0, $kontenjan - $onayli);
+    
+    basariDondur([
+        'id' => (int)$r['id'],
+        'kod' => $r['kod'],
+        'baslik' => $r['baslik'],
+        'aciklama' => $r['aciklama'],
+        'tur' => $r['tur'],
+        'baslangic' => $r['baslangic'],
+        'bitis' => $r['bitis'],
+        'sonBasvuru' => $r['son_basvuru'],
+        'sirket' => $r['sirket_adi'],
+        'sehir' => $r['sehir_adi'],
+        'ilce' => $r['ilce'],
+        'adres' => $r['adres'],
+        'gorsel' => $r['kapak_gorseli'],
+        'kontenjan' => $kontenjan,
+        'katilimci' => $onayli,
+        'kalanKontenjan' => $kalan,
+        'basvuruyaAcik' => (bool)$r['basvuruya_acik'] && $kalan > 0,
+        'sartlar' => [
+            'ogrenimDuzeyi' => $r['sart_ogrenim_duzeyi'],
+            'siniflar' => $siniflar,
+            'bolumler' => $bolumler,
+            'minOrtalama' => $r['sart_min_ortalama'] !== null ? (float)$r['sart_min_ortalama'] : null,
+            'belgeZorunlu' => (bool)$r['sart_belge_zorunlu'],
+        ]
+    ]);
+}
+
+// 25. Açık Vitrin - Filtreler (GET /acik/filtreler)
+if ($method === 'GET' && $uri === '/acik/filtreler') {
+    $stmtSehir = $pdo->query("
+      SELECT c.ad, COUNT(*) AS adet
+      FROM etkinlikler e
+      JOIN sehirler c ON c.id = e.sehir_id
+      WHERE e.durum = 'yayinda'
+      GROUP BY c.id
+      ORDER BY adet DESC, c.ad ASC
+    ");
+    $sehirler = array_map(fn($s) => ['ad' => $s['ad'], 'adet' => (int)$s['adet']], $stmtSehir->fetchAll());
+    
+    $stmtTur = $pdo->query("
+      SELECT e.tur, COUNT(*) AS adet
+      FROM etkinlikler e
+      WHERE e.durum = 'yayinda'
+      GROUP BY e.tur
+      ORDER BY e.tur ASC
+    ");
+    $turler = array_map(fn($t) => ['deger' => $t['tur'], 'adet' => (int)$t['adet']], $stmtTur->fetchAll());
+    
+    basariDondur([
+        'sehirler' => $sehirler,
+        'turler' => $turler,
+    ]);
+}
+
+// 26. Açık Vitrin - Öğrenci Kaydı (POST /acik/kayit veya POST /register)
+if ($method === 'POST' && ($uri === '/acik/kayit' || $uri === '/register')) {
+    $adSoyad = trim((string)($girdi['adSoyad'] ?? ''));
+    $eposta = trim((string)($girdi['email'] ?? $girdi['eposta'] ?? ''));
+    $sifre = (string)($girdi['sifre'] ?? $girdi['parola'] ?? '');
+    
+    if (!$adSoyad || !$eposta) {
+        hataDondur(400, 'eksik_alan', 'Ad soyad ve e-posta zorunludur');
+    }
+    
+    $stmtKontrol = $pdo->prepare('SELECT id FROM ogrenciler WHERE eposta = ?');
+    $stmtKontrol->execute([$eposta]);
+    $mevcutId = $stmtKontrol->fetchColumn();
+    
+    if ($mevcutId) {
+        basariDondur(['id' => (int)$mevcutId, 'adSoyad' => $adSoyad, 'eposta' => $eposta, 'mesaj' => 'Giriş başarılı']);
+    } else {
+        $stmt = $pdo->prepare('INSERT INTO ogrenciler (ad_soyad, eposta) VALUES (?, ?)');
+        $stmt->execute([$adSoyad, $eposta]);
+        $yeniId = (int)$pdo->lastInsertId();
+        basariDondur(['id' => $yeniId, 'adSoyad' => $adSoyad, 'eposta' => $eposta, 'mesaj' => 'Kayıt başarılı'], null, 201);
+    }
 }
 
 // Hiçbir rotaya uymadıysa 404

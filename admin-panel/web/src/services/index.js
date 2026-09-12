@@ -9,7 +9,7 @@ export const etkinlikService = {
   durumDegistir: (id, durum) => http.patch(`/etkinlikler/${id}/durum`, { durum }),
   sil: (id) => http.del(`/etkinlikler/${id}`),
   /** Tarayıcı doğrudan bu adrese gider; oturum çerezi isteğe eklenir. */
-  raporAdresi: (id) => `${import.meta.env.VITE_API_URL ?? '/api'}/etkinlikler/${id}/katilimcilar.xlsx`,
+  raporAdresi: (id) => `${import.meta.env.VITE_API_URL ?? '/etkinlig/api'}/etkinlikler/${id}/katilimcilar.xlsx`,
 };
 
 export const gorselService = {

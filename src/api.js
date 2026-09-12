@@ -1,5 +1,5 @@
-// Vitrinin API katmanı — oturumsuz /api/acik uçları.
-const TEMEL = import.meta.env.VITE_API_URL ?? '/api';
+// Vitrinin API katmanı — oturumsuz /etkinlig/api/acik uçları.
+const TEMEL = import.meta.env.VITE_API_URL ?? '/etkinlig/api';
 
 const sorgu = (params) => {
   const a = new URLSearchParams();
