@@ -1,0 +1,68 @@
+/* Tasarım kanvasındaki "Bileşen seti" artboard'unun kod karşılığı — tek kaynak. */
+:root {
+  --paper: #fcf8f1;
+  --paper-2: #f7f2e8;
+  --surface: #ffffff;
+  --ink: #1f1915;
+  --ink-2: #69625d;
+  --ink-3: #98918b;
+  --line: #e4dfd7;
+
+  --konferans: #c9593d;
+  --konferans-deep: #8b3722;
+  --konferans-tint: #ffe9e2;
+  --konferans-line: #fccabd;
+
+  --sunum: #009b72;
+  --sunum-deep: #00694b;
+  --sunum-tint: #dcf8ed;
+  --sunum-line: #b1e5d1;
+
+  --hackathon: #7e6ed3;
+  --hackathon-deep: #544793;
+  --hackathon-tint: #eeedff;
+  --hackathon-line: #d5d2fe;
+
+  --uyari: #b37000;
+  --uyari-deep: #7b4800;
+  --uyari-tint: #fdeed9;
+  --uyari-line: #efd3ac;
+
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 16px;
+
+  --font-display: 'Bricolage Grotesque', 'Trebuchet MS', sans-serif;
+  --font-body: 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--konferans-deep); text-decoration: none; }
+a:hover { color: var(--konferans); }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.gorunmez {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
