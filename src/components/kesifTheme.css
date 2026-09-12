@@ -1,0 +1,28 @@
+/*
+  Bu dosya sadece FilterBar / EventCard / EventGrid bileşenlerine ait
+  renk ve tipografi değişkenlerini tanımlar. Değişken isimleri "--event-"
+  öneki taşıyor, böylece arkadaşının hero bölümünde tanımladığı global
+  stillerle çakışma ihtimali olmaz.
+
+  Font ailelerini kullanmak için index.html <head> içine şunu ekleyebilirsin:
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+*/
+
+:root {
+  --event-bg: #fafaf8;
+  --event-surface: #ffffff;
+  --event-ink: #14161a;
+  --event-ink-muted: #5c5f66;
+  --event-border: #e4e1da;
+  --event-accent: #ff4e00;
+  --event-accent-ink: #ffffff;
+  --event-tag-bg: #f1efe9;
+  --event-tag-ink: #3a3d43;
+
+  --event-font-display: "Space Grotesk", "Segoe UI", sans-serif;
+  --event-font-body: "Inter", "Segoe UI", sans-serif;
+
+  --event-radius-sm: 6px;
+  --event-radius-md: 14px;
+}
