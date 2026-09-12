@@ -270,6 +270,34 @@ if ($method === 'POST' && $uri === '/oturum/cikis') {
     basariDondur(true);
 }
 
+// 5.1 Kendi Parolasını Değiştir
+if ($method === 'POST' && $uri === '/oturum/parola') {
+    $u = girisZorunlu($pdo);
+    $mevcutParola = (string)($girdi['mevcutParola'] ?? '');
+    $yeniParola = (string)($girdi['yeniParola'] ?? '');
+    
+    if (!$mevcutParola || !$yeniParola) {
+        hataDondur(400, 'eksik_alan', 'Mevcut parola ve yeni parola zorunludur');
+    }
+    
+    if (strlen($yeniParola) < 6) {
+        hataDondur(400, 'gecersiz_parola', 'Yeni parola en az 6 karakter olmalıdır');
+    }
+    
+    $stmt = $pdo->prepare('SELECT parola_hash FROM kullanicilar WHERE id = ?');
+    $stmt->execute([$u['id']]);
+    $hash = $stmt->fetchColumn();
+    
+    if (!$hash || !password_verify($mevcutParola, $hash)) {
+        hataDondur(400, 'hatali_parola', 'Mevcut parolanız hatalı');
+    }
+    
+    $yeniHash = password_hash($yeniParola, PASSWORD_BCRYPT);
+    $pdo->prepare('UPDATE kullanicilar SET parola_hash = ? WHERE id = ?')->execute([$yeniHash, $u['id']]);
+    
+    basariDondur(['guncellendi' => true]);
+}
+
 // 6. Tanımlar (81 İl, Bölümler, Şirketler, Enumlar)
 if ($method === 'GET' && $uri === '/tanimlar') {
     girisZorunlu($pdo);
