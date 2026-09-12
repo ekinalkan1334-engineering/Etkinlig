@@ -19,7 +19,7 @@ export const useTanimlarStore = defineStore('tanimlar', () => {
     yukleniyor.value = true;
     try {
       const { data } = await tanimService.tumu();
-      sehirler.value = (data.sehirler || []).sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+      sehirler.value = data.sehirler;
       bolumler.value = data.bolumler;
       sirketler.value = data.sirketler;
       turler.value = data.turler;

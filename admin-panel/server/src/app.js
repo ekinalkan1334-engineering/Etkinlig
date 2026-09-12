@@ -10,6 +10,8 @@ import { basvuruRouter } from './modules/basvuru/basvuru.routes.js';
 import { lookupRouter } from './modules/lookup/lookup.routes.js';
 import { istatistikRouter } from './modules/istatistik/istatistik.routes.js';
 import { kullaniciRouter, oturumRouter } from './modules/oturum/oturum.routes.js';
+import { gorselRouter } from './modules/gorsel/gorsel.routes.js';
+import { acikRouter } from './modules/acik/acik.routes.js';
 
 export function createApp() {
   const app = express();
@@ -19,7 +21,16 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 
-  app.get('/api/saglik', async (req, res) => {
+  // Yüklenen görseller herkese açık servis edilir (vitrin de gösterecek).
+  app.use(env.yuklemeYolu, express.static(env.yuklemeKlasoru, {
+    maxAge: '7d',
+    index: false,
+    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+  }));
+
+  const apiRouter = express.Router();
+
+  apiRouter.get('/saglik', async (req, res) => {
     try {
       res.json({ data: { api: true, db: await healthcheck() } });
     } catch {
@@ -27,15 +38,21 @@ export function createApp() {
     }
   });
 
-  // Açık uçlar: giriş, çıkış, ilk kurulum.
-  app.use('/api/oturum', oturumRouter);
+  // --- Oturumsuz uçlar ---
+  apiRouter.use('/oturum', oturumRouter);
+  apiRouter.use('/acik', acikRouter);   // vitrin: yalnızca yayındaki etkinlikler
 
-  // Bundan sonrası oturum ister.
-  app.use('/api/kullanicilar', kullaniciRouter);
-  app.use('/api/etkinlikler', girisGerekli, etkinlikRouter);
-  app.use('/api/basvurular', girisGerekli, basvuruRouter);
-  app.use('/api/tanimlar', girisGerekli, lookupRouter);
-  app.use('/api/istatistik', girisGerekli, istatistikRouter);
+  // --- Oturum isteyenler ---
+  apiRouter.use('/kullanicilar', kullaniciRouter);
+  apiRouter.use('/gorseller', girisGerekli, gorselRouter);
+  apiRouter.use('/etkinlikler', girisGerekli, etkinlikRouter);
+  apiRouter.use('/basvurular', girisGerekli, basvuruRouter);
+  apiRouter.use('/tanimlar', girisGerekli, lookupRouter);
+  apiRouter.use('/istatistik', girisGerekli, istatistikRouter);
+
+  // Hem /api hem /etkinlig/api yollarından hizmet verir
+  app.use('/api', apiRouter);
+  app.use('/etkinlig/api', apiRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ROLLER = ['admin', 'moderator'];
+export const ROLLER = ['admin', 'sirket_admin'];
 
 const parola = z
   .string()
@@ -14,16 +14,28 @@ export const girisGovdesi = z.object({
   parola: z.string().min(1, 'Parola zorunlu'),
 });
 
+/** Genel admin şirkete bağlanmaz; şirket admini bir şirket seçmek zorundadır. */
+const kapsamTutarli = (v, ctx) => {
+  if (v.rol === 'sirket_admin' && !v.sirketId) {
+    ctx.addIssue({ code: 'custom', path: ['sirketId'], message: 'Şirket yöneticisi için şirket seçin' });
+  }
+  if (v.rol === 'admin' && v.sirketId) {
+    ctx.addIssue({ code: 'custom', path: ['sirketId'], message: 'Genel yönetici bir şirkete bağlanamaz' });
+  }
+};
+
 export const kullaniciOlusturGovdesi = z.object({
   adSoyad: z.string().trim().min(3, 'Ad soyad en az 3 karakter').max(120),
   eposta: z.string().trim().toLowerCase().email('Geçerli bir e-posta girin').max(160),
   parola,
-  rol: z.enum(ROLLER).default('moderator'),
-});
+  rol: z.enum(ROLLER).default('sirket_admin'),
+  sirketId: z.coerce.number().int().positive().nullish().transform((v) => v ?? null),
+}).superRefine(kapsamTutarli);
 
 export const kullaniciGuncelleGovdesi = z.object({
   adSoyad: z.string().trim().min(3).max(120).optional(),
   rol: z.enum(ROLLER).optional(),
+  sirketId: z.coerce.number().int().positive().nullish(),
   aktif: z.boolean().optional(),
 });
 

@@ -3,27 +3,9 @@
 SET NAMES utf8mb4;
 
 INSERT INTO sehirler (ad, plaka_kodu) VALUES
-  ('Adana','01'),('Adıyaman','02'),('Afyonkarahisar','03'),('Ağrı','04'),
-  ('Amasya','05'),('Ankara','06'),('Antalya','07'),('Artvin','08'),
-  ('Aydın','09'),('Balıkesir','10'),('Bilecik','11'),('Bingöl','12'),
-  ('Bitlis','13'),('Bolu','14'),('Burdur','15'),('Bursa','16'),
-  ('Çanakkale','17'),('Çankırı','18'),('Çorum','19'),('Denizli','20'),
-  ('Diyarbakır','21'),('Edirne','22'),('Elazığ','23'),('Erzincan','24'),
-  ('Erzurum','25'),('Eskişehir','26'),('Gaziantep','27'),('Giresun','28'),
-  ('Gümüşhane','29'),('Hakkari','30'),('Hatay','31'),('Isparta','32'),
-  ('Mersin','33'),('İstanbul','34'),('İzmir','35'),('Kars','36'),
-  ('Kastamonu','37'),('Kayseri','38'),('Kırklareli','39'),('Kırşehir','40'),
-  ('Kocaeli','41'),('Konya','42'),('Kütahya','43'),('Malatya','44'),
-  ('Manisa','45'),('Kahramanmaraş','46'),('Mardin','47'),('Muğla','48'),
-  ('Muş','49'),('Nevşehir','50'),('Niğde','51'),('Ordu','52'),
-  ('Rize','53'),('Sakarya','54'),('Samsun','55'),('Siirt','56'),
-  ('Sinop','57'),('Sivas','58'),('Tekirdağ','59'),('Tokat','60'),
-  ('Trabzon','61'),('Tunceli','62'),('Şanlıurfa','63'),('Uşak','64'),
-  ('Van','65'),('Yozgat','66'),('Zonguldak','67'),('Aksaray','68'),
-  ('Bayburt','69'),('Karaman','70'),('Kırıkkale','71'),('Batman','72'),
-  ('Şırnak','73'),('Bartın','74'),('Ardahan','75'),('Iğdır','76'),
-  ('Yalova','77'),('Karabük','78'),('Kilis','79'),('Osmaniye','80'),
-  ('Düzce','81');
+  ('Adana','01'),('Ankara','06'),('Antalya','07'),('Bursa','16'),
+  ('Çankırı','18'),('Eskişehir','26'),('Gaziantep','27'),('İstanbul','34'),
+  ('İzmir','35'),('Kayseri','38'),('Konya','42'),('Trabzon','61');
 
 INSERT INTO bolumler (ad, fakulte) VALUES
   ('Bilgisayar Mühendisliği','Mühendislik Fakültesi'),
@@ -43,10 +25,16 @@ INSERT INTO sirketler (ad, eposta, web_sitesi) VALUES
   ('STM Savunma Teknolojileri','etkinlik@stm.com.tr','stm.com.tr'),
   ('Trendyol Group','campus@trendyol.com','trendyol.com');
 
--- Varsayılan yönetici — giriş: admin@etkinlig.local / Admin1234!
--- İlk girişten sonra Kullanıcılar ekranından parolayı değiştirin.
-INSERT INTO kullanicilar (ad_soyad, eposta, parola_hash, rol, aktif) VALUES
-  ('M. Emir Ata','admin@etkinlig.local','$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','admin',1);
+-- Tüm örnek hesapların parolası: Admin1234!  (ilk girişten sonra değiştirin)
+-- Genel yönetici — tüm şirketleri görür
+INSERT INTO kullanicilar (ad_soyad, eposta, parola_hash, rol, sirket_id, aktif) VALUES
+  ('M. Emir Ata','admin@etkinlig.local','$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','admin',NULL,1);
+
+-- Şirket yöneticileri — yalnızca kendi şirketlerinin etkinlik ve başvurularını görür
+INSERT INTO kullanicilar (ad_soyad, eposta, parola_hash, rol, sirket_id, aktif) VALUES
+  ('Deniz Aksoy','deniz@technobridge.com.tr','$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','sirket_admin',1,1),
+  ('Selin Korkmaz','selin@papara.com',        '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','sirket_admin',2,1),
+  ('Kaan Erdem','kaan@aselsan.com.tr',        '$2b$10$y7NgDUAqsIWIAUzkEm4urOFDKc3lnHY4CQM5NNElkKEWr6t6VH1VS','sirket_admin',3,1);
 
 INSERT INTO ogrenciler (ad_soyad, eposta, ogrenci_no, universite, bolum_id, ogrenim_duzeyi, sinif, not_ortalamasi) VALUES
   ('Zeynep Kaya','zeynep.kaya@ogr.edu.tr','20210101','Çankırı Karatekin Üniversitesi',1,'lisans',4,3.21),

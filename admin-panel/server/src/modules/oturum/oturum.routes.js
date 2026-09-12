@@ -15,7 +15,7 @@ oturumRouter.get('/durum', asyncHandler(async (req, res) => {
 }));
 
 oturumRouter.post('/kurulum', asyncHandler(async (req, res) => {
-  const govde = parse(kullaniciOlusturGovdesi, { ...req.body, rol: 'admin' });
+  const govde = parse(kullaniciOlusturGovdesi, { ...req.body, rol: 'admin', sirketId: null });
   const kullanici = await service.kurulum(govde);
   const { jeton } = await service.giris({ eposta: govde.eposta, parola: govde.parola });
   res.cookie(CEREZ_ADI, jeton, cerezSecenekleri);

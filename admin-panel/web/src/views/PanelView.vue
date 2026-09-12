@@ -8,9 +8,11 @@ import StatKart from '@/components/ui/StatKart.vue';
 import TurRozeti from '@/components/ui/TurRozeti.vue';
 import DurumMesaji from '@/components/ui/DurumMesaji.vue';
 import { usePanel } from '@/viewmodels/usePanel.js';
+import { useOturumStore } from '@/stores/oturum.js';
 import { saat, sayi, tarih, tarihUzun } from '@/utils/format.js';
 
 const router = useRouter();
+const oturum = useOturumStore();
 const vm = usePanel();
 onMounted(() => vm.yukle());
 
@@ -18,7 +20,10 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 </script>
 
 <template>
-  <AppUstCubuk baslik="Panel" :alt-baslik="`${tarihUzun(new Date())} · Genel durum özeti`">
+  <AppUstCubuk
+    baslik="Panel"
+    :alt-baslik="`${tarihUzun(new Date())} · ${oturum.admin ? 'Tüm şirketler' : oturum.sirketAdi}`"
+  >
     <template #aksiyon>
       <AppButton cesit="birincil" simge="arti" @click="router.push({ name: 'etkinlik-yeni' })">
         Yeni etkinlik

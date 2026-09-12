@@ -1,4 +1,5 @@
 import { ApiError } from '../../core/http.js';
+import { kaydaErisimDogrula } from '../../core/kapsam.js';
 import * as repo from './etkinlik.repository.js';
 
 /** DB satırını API sözleşmesine çevirir — tek dönüşüm noktası (DRY). */
@@ -56,9 +57,11 @@ export async function listele(filtre) {
   };
 }
 
-export async function bul(id) {
+/** Kullanıcı verildiyse kayıt onun kapsamında mı diye bakılır. */
+export async function bul(id, kullanici = null) {
   const satir = await repo.bul(id);
   if (!satir) throw ApiError.notFound('Etkinlik bulunamadı');
+  if (kullanici) kaydaErisimDogrula(satir.sirket_id, kullanici);
   return detayaCevir(satir);
 }
 
@@ -69,27 +72,22 @@ export async function olustur(girdi) {
   return bul(id);
 }
 
-export async function guncelle(id, girdi) {
-  await bul(id); // yoksa 404
+export async function guncelle(id, girdi, kullanici = null) {
+  await bul(id, kullanici); // yoksa 404, kapsam dışıysa 404
   await repo.guncelle(id, girdi);
   return bul(id);
 }
 
-export async function durumDegistir(id, durum) {
-  const degisti = await repo.durumDegistir(id, durum);
-  if (!degisti) throw ApiError.notFound('Etkinlik bulunamadı');
+export async function durumDegistir(id, durum, kullanici = null) {
+  await bul(id, kullanici);
+  await repo.durumDegistir(id, durum);
   return bul(id);
 }
 
-export async function sil(id) {
-  const silindi = await repo.sil(id);
-  if (!silindi) throw ApiError.notFound('Etkinlik bulunamadı');
+export async function sil(id, kullanici = null) {
+  await bul(id, kullanici);
+  await repo.sil(id);
 }
 
-export async function yetkiKontrol(id, kullanici) {
-  if (!kullanici || kullanici.rol === 'admin') return;
-  const etkinlik = await bul(id);
-  if (kullanici.sirketId && etkinlik.sirket.id !== kullanici.sirketId) {
-    throw new ApiError(403, 'yetki_yok', 'Başka bir şirkete ait etkinliği düzenleyemez veya silemezsiniz');
-  }
-}
+/** Excel raporu için katılımcı satırları. */
+export const katilimcilar = (etkinlikId) => repo.katilimcilar(etkinlikId);

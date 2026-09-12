@@ -10,7 +10,11 @@ export const useOturumStore = defineStore('oturum', () => {
   const islemde = ref(false);
 
   const girisYapildi = computed(() => !!kullanici.value);
+  /** Genel yönetici: tüm şirketleri görür, hesap açar. */
   const admin = computed(() => kullanici.value?.rol === 'admin');
+  const sirketAdmini = computed(() => kullanici.value?.rol === 'sirket_admin');
+  const sirketAdi = computed(() => kullanici.value?.sirketAdi ?? null);
+  const rolEtiketi = computed(() => (admin.value ? 'Genel yönetici' : 'Şirket yöneticisi'));
 
   /** Uygulama açılışında bir kez: çerez geçerli mi, sistem kurulu mu? */
   async function baslat() {
@@ -64,5 +68,9 @@ export const useOturumStore = defineStore('oturum', () => {
   // API 401 dönerse oturumu düşür; router guard giriş ekranına alır.
   oturumDustugundeCagir(() => { kullanici.value = null; });
 
-  return { kullanici, kurulumGerekli, hazir, islemde, girisYapildi, admin, baslat, giris, kurulum, cikis, parolaDegistir };
+  return {
+    kullanici, kurulumGerekli, hazir, islemde,
+    girisYapildi, admin, sirketAdmini, sirketAdi, rolEtiketi,
+    baslat, giris, kurulum, cikis, parolaDegistir,
+  };
 });

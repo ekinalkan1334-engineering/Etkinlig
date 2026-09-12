@@ -8,6 +8,7 @@ import AppIcon from '@/components/ui/AppIcon.vue';
 import AppAnahtar from '@/components/ui/AppAnahtar.vue';
 import FormAlani from '@/components/ui/FormAlani.vue';
 import SecimCipi from '@/components/ui/SecimCipi.vue';
+import GorselYukleyici from '@/components/ui/GorselYukleyici.vue';
 import { useEtkinlikForm } from '@/viewmodels/useEtkinlikForm.js';
 import { useTanimlarStore } from '@/stores/tanimlar.js';
 import { useOturumStore } from '@/stores/oturum.js';
@@ -24,13 +25,10 @@ const duzenleme = computed(() => !!route.params.id);
 
 onMounted(async () => {
   await tanimlar.yukle();
+  // Şirket admininde şirket sorulmaz, oturumdan gelir.
+  if (!oturum.admin) vm.model.sirketId = oturum.kullanici.sirketId;
   if (duzenleme.value) {
     const { data } = await etkinlikService.bul(Number(route.params.id));
-    if (!oturum.admin && oturum.kullanici?.sirketId && data.sirket?.id !== oturum.kullanici.sirketId) {
-      alert('Başka bir şirkete ait etkinliği düzenleyemezsiniz.');
-      router.replace({ name: 'etkinlikler' });
-      return;
-    }
     vm.doldur(data);
   }
 });
@@ -83,19 +81,22 @@ async function kaydet(durum) {
             </FormAlani>
 
             <div class="ikili">
-              <FormAlani
-                etiket="Şirket / kurum"
-                zorunlu
-                :hata="vm.hatalar.value.sirketId"
-                :yardim="vm.sirketSecimiKilitli.value ? 'Bağlı olduğunuz şirket otomatik seçilmiştir ve değiştirilemez.' : ''"
-              >
+              <!-- Şirket admininde seçim yok: etkinlik kendi şirketi adına açılır. -->
+              <FormAlani v-if="oturum.admin" etiket="Şirket / kurum" zorunlu :hata="vm.hatalar.value.sirketId">
                 <template #default="{ hatali }">
-                  <select v-model="vm.model.sirketId" :aria-invalid="hatali" :disabled="vm.sirketSecimiKilitli.value">
+                  <select v-model="vm.model.sirketId" :aria-invalid="hatali">
                     <option value="">Şirket seçin</option>
                     <option v-for="s in tanimlar.sirketler" :key="s.id" :value="s.id">{{ s.ad }}</option>
                   </select>
                 </template>
               </FormAlani>
+              <FormAlani v-else etiket="Şirket / kurum">
+                <div class="sabit-alan">
+                  <AppIcon ad="bina" :boyut="16" />
+                  <span>{{ oturum.sirketAdi }}</span>
+                </div>
+              </FormAlani>
+
               <FormAlani etiket="İletişim e-postası" :hata="vm.hatalar.value.iletisimEpostasi">
                 <template #default="{ hatali }">
                   <input v-model="vm.model.iletisimEpostasi" type="email" :aria-invalid="hatali" placeholder="etkinlik@sirket.com" />
@@ -227,6 +228,13 @@ async function kaydet(durum) {
           </div>
         </AppKart>
 
+        <AppKart baslik="Kapak görseli">
+          <template #aksiyon>
+            <span class="ipucu">Vitrinde bu görsel görünür</span>
+          </template>
+          <GorselYukleyici v-model="vm.model.kapakGorseli" />
+        </AppKart>
+
         <AppKart baslik="Yayın ayarları">
           <div class="ayarlar">
             <AppAnahtar v-model="vm.model.basvuruyaAcik" etiket="Başvurulara açık" />
@@ -238,6 +246,7 @@ async function kaydet(durum) {
 
         <AppKart baslik="Özet">
           <ul class="ozet">
+            <li><span>Şirket</span><strong>{{ oturum.admin ? (tanimlar.sirketler.find((s) => s.id === Number(vm.model.sirketId))?.ad ?? '—') : oturum.sirketAdi }}</strong></li>
             <li><span>Tür</span><strong>{{ tanimlar.turler.find((t) => t.deger === vm.model.tur)?.etiket ?? '—' }}</strong></li>
             <li><span>Sınıflar</span><strong>{{ vm.model.sartSiniflar.length ? vm.model.sartSiniflar.map(sinifEtiketi).join(', ') : '—' }}</strong></li>
             <li><span>Bölüm</span><strong>{{ vm.model.sartBolumIdleri.length || 'Tümü' }}</strong></li>
@@ -285,6 +294,14 @@ async function kaydet(durum) {
 .ikili { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .uclu { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 760px) { .ikili, .uclu { grid-template-columns: minmax(0, 1fr); } }
+
+/* Değiştirilemeyen alan: kontrol gibi durur ama girdi değildir. */
+.sabit-alan {
+  height: 42px; display: flex; align-items: center; gap: 9px;
+  padding: 0 13px; border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--paper-2);
+  font-size: 14px; font-weight: 500; color: var(--ink-2);
+}
 
 .cipler { display: flex; flex-wrap: wrap; gap: 8px; }
 .ipucu { font-size: 12px; color: var(--ink-3); }

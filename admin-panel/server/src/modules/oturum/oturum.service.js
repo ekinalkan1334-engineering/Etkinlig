@@ -13,13 +13,18 @@ export const cevir = (r) => ({
   eposta: r.eposta,
   rol: r.rol,
   sirketId: r.sirket_id ?? null,
+  sirketAdi: r.sirket_adi ?? null,
   aktif: !!r.aktif,
   sonGiris: r.son_giris,
   olusturuldu: r.olusturuldu,
 });
 
 export const jetonUret = (kullanici) =>
-  jwt.sign({ sub: kullanici.id, rol: kullanici.rol, sirketId: kullanici.sirketId ?? null }, env.jwt.gizli, { expiresIn: env.jwt.sure });
+  jwt.sign(
+    { sub: kullanici.id, rol: kullanici.rol, sid: kullanici.sirketId ?? null },
+    env.jwt.gizli,
+    { expiresIn: env.jwt.sure },
+  );
 
 export function jetonCoz(jeton) {
   try {
@@ -43,6 +48,10 @@ export async function giris({ eposta, parola }) {
   return { kullanici, jeton: jetonUret(kullanici) };
 }
 
+/**
+ * Oturumdaki kullanıcı her istekte DB'den tazelenir — rolü veya şirketi
+ * değiştirilmiş bir hesap eski jetonuyla eski yetkisini kullanamaz.
+ */
 export async function ben(id) {
   const satir = await repo.idIleBul(id);
   if (!satir || !satir.aktif) throw new ApiError(401, 'kimlik_hatasi', 'Oturum geçersiz');
@@ -61,11 +70,20 @@ export async function guncelle(id, girdi, istekSahibiId) {
   const mevcut = await repo.idIleBul(id);
   if (!mevcut) throw ApiError.notFound('Kullanıcı bulunamadı');
 
-  // Son aktif admin kendini kilitleyemesin.
+  const yeniRol = girdi.rol ?? mevcut.rol;
+  const yeniSirket = girdi.sirketId !== undefined ? girdi.sirketId : mevcut.sirket_id;
+  if (yeniRol === 'sirket_admin' && !yeniSirket) {
+    throw ApiError.badRequest('Şirket yöneticisi bir şirkete bağlı olmalı', [
+      { alan: 'sirketId', mesaj: 'Şirket seçin' },
+    ]);
+  }
+  if (yeniRol === 'admin' && yeniSirket) girdi = { ...girdi, sirketId: null };
+
+  // Son aktif genel yönetici kendini kilitleyemesin.
   const adminlikBitiyor = (girdi.rol && girdi.rol !== 'admin') || girdi.aktif === false;
   if (mevcut.rol === 'admin' && mevcut.aktif && adminlikBitiyor) {
     if ((await repo.aktifAdminSayisi()) <= 1) {
-      throw ApiError.conflict('Sistemde en az bir aktif yönetici kalmalı');
+      throw ApiError.conflict('Sistemde en az bir aktif genel yönetici kalmalı');
     }
   }
   if (Number(id) === Number(istekSahibiId) && girdi.aktif === false) {
@@ -97,17 +115,17 @@ export async function sil(id, istekSahibiId) {
   const mevcut = await repo.idIleBul(id);
   if (!mevcut) throw ApiError.notFound('Kullanıcı bulunamadı');
   if (mevcut.rol === 'admin' && mevcut.aktif && (await repo.aktifAdminSayisi()) <= 1) {
-    throw ApiError.conflict('Sistemde en az bir aktif yönetici kalmalı');
+    throw ApiError.conflict('Sistemde en az bir aktif genel yönetici kalmalı');
   }
   await repo.sil(id);
 }
 
-/** Hiç kullanıcı yoksa ilk yöneticinin kurulmasına izin verilir. */
+/** Hiç kullanıcı yoksa ilk genel yöneticinin kurulmasına izin verilir. */
 export const kurulumGerekli = async () => (await repo.sayisi()) === 0;
 
 export async function kurulum(girdi) {
   if (!(await kurulumGerekli())) {
     throw ApiError.conflict('Sistemde zaten kullanıcı var, kurulum kapalı');
   }
-  return olustur({ ...girdi, rol: 'admin' });
+  return olustur({ ...girdi, rol: 'admin', sirketId: null });
 }

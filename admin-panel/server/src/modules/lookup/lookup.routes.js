@@ -2,15 +2,22 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { execute, queryAll } from '../../db/pool.js';
 import { asyncHandler, created, ok, parse } from '../../core/http.js';
+import { kapsamSirketId } from '../../core/kapsam.js';
+import { rolGerekli } from '../../core/guard.js';
 
 export const lookupRouter = Router();
 
 /** Form ekranının ihtiyaç duyduğu tüm listeler tek çağrıda. */
 lookupRouter.get('/', asyncHandler(async (req, res) => {
+  const sirketId = kapsamSirketId(req.kullanici);
   const [sehirler, bolumler, sirketler] = await Promise.all([
     queryAll('SELECT id, ad, plaka_kodu AS plakaKodu FROM sehirler ORDER BY ad'),
     queryAll('SELECT id, ad, fakulte FROM bolumler ORDER BY ad'),
-    queryAll('SELECT id, ad, eposta FROM sirketler ORDER BY ad'),
+    // Şirket admini yalnızca kendi şirketini görür — açılır listede başka şirket çıkmaz.
+    queryAll(
+      'SELECT id, ad, eposta FROM sirketler WHERE (:sirketId IS NULL OR id = :sirketId) ORDER BY ad',
+      { sirketId },
+    ),
   ]);
   ok(res, {
     sehirler,
@@ -39,7 +46,8 @@ lookupRouter.get('/', asyncHandler(async (req, res) => {
   });
 }));
 
-lookupRouter.post('/sirketler', asyncHandler(async (req, res) => {
+// Yeni şirket açmak genel yöneticinin işi.
+lookupRouter.post('/sirketler', rolGerekli('admin'), asyncHandler(async (req, res) => {
   const govde = parse(
     z.object({
       ad: z.string().trim().min(2).max(160),

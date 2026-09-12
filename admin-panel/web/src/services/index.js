@@ -8,6 +8,24 @@ export const etkinlikService = {
   guncelle: (id, govde) => http.put(`/etkinlikler/${id}`, govde),
   durumDegistir: (id, durum) => http.patch(`/etkinlikler/${id}/durum`, { durum }),
   sil: (id) => http.del(`/etkinlikler/${id}`),
+  /** Tarayıcı doğrudan bu adrese gider; oturum çerezi isteğe eklenir. */
+  raporAdresi: (id) => `${import.meta.env.VITE_API_URL ?? '/api'}/etkinlikler/${id}/katilimcilar.xlsx`,
+};
+
+export const gorselService = {
+  /** FormData ile yükler; JSON gövdesi olmadığı için http sarmalayıcısını kullanmaz. */
+  async yukle(dosya) {
+    const govde = new FormData();
+    govde.append('gorsel', dosya);
+    const yanit = await fetch(`${import.meta.env.VITE_API_URL ?? '/api'}/gorseller`, {
+      method: 'POST',
+      credentials: 'include',
+      body: govde,
+    });
+    const cevap = await yanit.json().catch(() => null);
+    if (!yanit.ok) throw new Error(cevap?.error?.message ?? 'Görsel yüklenemedi');
+    return cevap.data;
+  },
 };
 
 export const basvuruService = {

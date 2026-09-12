@@ -7,6 +7,7 @@ const VARSAYILAN_FILTRE = () => ({
   tur: '',
   durum: '',
   sehirId: '',
+  sirketId: '',
   siralama: 'baslangic',
   yon: 'asc',
   sayfa: 1,
@@ -27,7 +28,7 @@ export function useEtkinlikListesi() {
 
   let zamanlayici;
   watch(
-    () => [filtre.arama, filtre.tur, filtre.durum, filtre.sehirId, filtre.siralama, filtre.yon],
+    () => [filtre.arama, filtre.tur, filtre.durum, filtre.sehirId, filtre.sirketId, filtre.siralama, filtre.yon],
     () => {
       filtre.sayfa = 1;
       clearTimeout(zamanlayici);

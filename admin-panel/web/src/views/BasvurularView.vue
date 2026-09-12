@@ -7,10 +7,12 @@ import DurumRozeti from '@/components/ui/DurumRozeti.vue';
 import DurumMesaji from '@/components/ui/DurumMesaji.vue';
 import { basvuruService } from '@/services';
 import { useTanimlarStore } from '@/stores/tanimlar.js';
+import { useOturumStore } from '@/stores/oturum.js';
 import { saat, sinifEtiketi, tarih } from '@/utils/format.js';
 
 const tanimlar = useTanimlarStore();
-const filtre = reactive({ durum: 'beklemede', sinif: '' });
+const oturum = useOturumStore();
+const filtre = reactive({ durum: 'beklemede', sinif: '', sirketId: '' });
 const kayitlar = ref([]);
 const yukleniyor = ref(false);
 const hata = ref(null);
@@ -22,6 +24,7 @@ async function yukle() {
     const { data } = await basvuruService.listele({
       durum: filtre.durum || undefined,
       sinif: filtre.sinif === '' ? undefined : filtre.sinif,
+      sirketId: filtre.sirketId || undefined,
       limit: 100,
     });
     kayitlar.value = data;
@@ -41,10 +44,19 @@ onMounted(yukle);
 </script>
 
 <template>
-  <AppUstCubuk baslik="Başvurular" alt-baslik="Tüm etkinliklerden gelen öğrenci başvuruları" />
+  <AppUstCubuk
+    baslik="Başvurular"
+    :alt-baslik="oturum.admin
+      ? 'Tüm şirketlerin etkinliklerine gelen öğrenci başvuruları'
+      : `${oturum.sirketAdi} etkinliklerine gelen öğrenci başvuruları`"
+  />
 
   <div class="sayfa">
     <div class="filtreler">
+      <select v-if="oturum.admin" v-model="filtre.sirketId" class="secim" @change="yukle">
+        <option value="">Şirket: Tümü</option>
+        <option v-for="s in tanimlar.sirketler" :key="s.id" :value="s.id">{{ s.ad }}</option>
+      </select>
       <select v-model="filtre.durum" class="secim" @change="yukle">
         <option value="">Durum: Tümü</option>
         <option value="beklemede">Beklemede</option>
@@ -66,13 +78,18 @@ onMounted(yukle);
       <div v-if="!yukleniyor && !hata && kayitlar.length" class="tablo-sarmal">
         <table class="tablo">
           <thead>
-            <tr><th>Öğrenci</th><th>Bölüm / Sınıf</th><th>Etkinlik</th><th>Tarih</th><th>Durum</th><th class="sag">İşlem</th></tr>
+            <tr>
+              <th>Öğrenci</th><th>Bölüm / Sınıf</th><th>Etkinlik</th>
+              <th v-if="oturum.admin">Şirket</th>
+              <th>Tarih</th><th>Durum</th><th class="sag">İşlem</th>
+            </tr>
           </thead>
           <tbody>
             <tr v-for="b in kayitlar" :key="b.id">
               <td class="kalin">{{ b.ogrenci.adSoyad }}</td>
               <td class="notr">{{ b.ogrenci.bolum ?? '—' }} · {{ sinifEtiketi(b.ogrenci.sinif) }}</td>
               <td class="notr">{{ b.etkinlik.baslik }}</td>
+              <td v-if="oturum.admin" class="notr">{{ b.sirket?.ad ?? '—' }}</td>
               <td class="notr">{{ tarih(b.basvuruTarihi) }} · {{ saat(b.basvuruTarihi) }}</td>
               <td><DurumRozeti :durum="b.durum" kapsam="basvuru" /></td>
               <td class="sag">

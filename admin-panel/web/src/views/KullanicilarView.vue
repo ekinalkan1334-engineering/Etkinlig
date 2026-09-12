@@ -8,14 +8,16 @@ import FormAlani from '@/components/ui/FormAlani.vue';
 import DurumMesaji from '@/components/ui/DurumMesaji.vue';
 import { kullaniciService } from '@/services';
 import { useOturumStore } from '@/stores/oturum.js';
+import { useTanimlarStore } from '@/stores/tanimlar.js';
 import { saat, tarih } from '@/utils/format.js';
 
 const oturum = useOturumStore();
+const tanimlar = useTanimlarStore();
 const kayitlar = ref([]);
 const yukleniyor = ref(false);
 const hata = ref(null);
 
-const yeni = reactive({ adSoyad: '', eposta: '', parola: '', rol: 'moderator' });
+const yeni = reactive({ adSoyad: '', eposta: '', parola: '', rol: 'sirket_admin', sirketId: '' });
 const formHatalari = ref({});
 const formHatasi = ref(null);
 const kaydediyor = ref(false);
@@ -38,8 +40,11 @@ async function hesapAc() {
   formHatasi.value = null;
   kaydediyor.value = true;
   try {
-    await kullaniciService.olustur({ ...yeni });
-    Object.assign(yeni, { adSoyad: '', eposta: '', parola: '', rol: 'moderator' });
+    await kullaniciService.olustur({
+      ...yeni,
+      sirketId: yeni.rol === 'admin' ? null : Number(yeni.sirketId) || null,
+    });
+    Object.assign(yeni, { adSoyad: '', eposta: '', parola: '', rol: 'sirket_admin', sirketId: '' });
     await yukle();
   } catch (e) {
     if (Array.isArray(e.details)) {
@@ -61,8 +66,18 @@ async function calistir(islem) {
   }
 }
 
-const rolDegistir = (k) =>
-  calistir(() => kullaniciService.guncelle(k.id, { rol: k.rol === 'admin' ? 'moderator' : 'admin' }));
+function rolDegistir(k) {
+  if (k.rol === 'admin') {
+    const sirket = window.prompt(
+      `${k.adSoyad} hangi şirkete bağlansın? Numarayı yazın:\n` +
+      tanimlar.sirketler.map((s) => `${s.id} — ${s.ad}`).join('\n'),
+    );
+    if (!sirket) return;
+    calistir(() => kullaniciService.guncelle(k.id, { rol: 'sirket_admin', sirketId: Number(sirket) }));
+  } else {
+    calistir(() => kullaniciService.guncelle(k.id, { rol: 'admin', sirketId: null }));
+  }
+}
 
 const aktiflikDegistir = (k) => calistir(() => kullaniciService.guncelle(k.id, { aktif: !k.aktif }));
 
@@ -94,7 +109,7 @@ onMounted(yukle);
         <div v-if="!yukleniyor && !hata && kayitlar.length" class="tablo-sarmal">
           <table class="tablo">
             <thead>
-              <tr><th>Hesap</th><th>Rol</th><th>Durum</th><th>Son giriş</th><th class="sag">İşlem</th></tr>
+              <tr><th>Hesap</th><th>Rol</th><th>Şirket</th><th>Durum</th><th>Son giriş</th><th class="sag">İşlem</th></tr>
             </thead>
             <tbody>
               <tr v-for="k in kayitlar" :key="k.id">
@@ -107,9 +122,10 @@ onMounted(yukle);
                 </td>
                 <td>
                   <AppRozet :ton="k.rol === 'admin' ? 'hackathon' : 'notr'" yuvarlak>
-                    {{ k.rol === 'admin' ? 'Yönetici' : 'Moderatör' }}
+                    {{ k.rol === 'admin' ? 'Genel yönetici' : 'Şirket yöneticisi' }}
                   </AppRozet>
                 </td>
+                <td class="notr">{{ k.sirketAdi ?? 'Tüm şirketler' }}</td>
                 <td>
                   <AppRozet :ton="k.aktif ? 'sunum' : 'konferans'" nokta>
                     {{ k.aktif ? 'Aktif' : 'Pasif' }}
@@ -119,7 +135,7 @@ onMounted(yukle);
                 <td class="sag">
                   <div class="islemler">
                     <AppButton cesit="hayalet" @click="rolDegistir(k)">
-                      {{ k.rol === 'admin' ? 'Moderatör yap' : 'Yönetici yap' }}
+                      {{ k.rol === 'admin' ? 'Şirkete bağla' : 'Genel yönetici yap' }}
                     </AppButton>
                     <AppButton cesit="hayalet" @click="aktiflikDegistir(k)">
                       {{ k.aktif ? 'Pasifleştir' : 'Aktifleştir' }}
@@ -161,9 +177,22 @@ onMounted(yukle);
 
           <FormAlani etiket="Rol" :hata="formHatalari.rol">
             <select v-model="yeni.rol">
-              <option value="moderator">Moderatör — etkinlik ve başvuru yönetir</option>
-              <option value="admin">Yönetici — kullanıcı hesaplarını da yönetir</option>
+              <option value="sirket_admin">Şirket yöneticisi — yalnızca kendi şirketini görür</option>
+              <option value="admin">Genel yönetici — tüm şirketleri ve hesapları yönetir</option>
             </select>
+          </FormAlani>
+
+          <FormAlani
+            v-if="yeni.rol === 'sirket_admin'"
+            etiket="Şirket" zorunlu :hata="formHatalari.sirketId"
+            yardim="Bu hesap yalnızca seçilen şirketin etkinlik ve başvurularını görür"
+          >
+            <template #default="{ hatali }">
+              <select v-model="yeni.sirketId" :aria-invalid="hatali">
+                <option value="">Şirket seçin</option>
+                <option v-for="s in tanimlar.sirketler" :key="s.id" :value="s.id">{{ s.ad }}</option>
+              </select>
+            </template>
           </FormAlani>
 
           <AppButton tip="submit" cesit="birincil" simge="arti" :pasif="kaydediyor" class="form__dugme">

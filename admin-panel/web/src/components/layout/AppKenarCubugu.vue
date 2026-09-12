@@ -47,7 +47,7 @@ async function parolaDegistir() {
       <div class="kenar__marka"><AppIcon ad="takvim" :kalinlik="2" /></div>
       <div class="kenar__ad">
         <span class="kenar__baslik">etkinlig</span>
-        <span class="kenar__altbaslik">yönetim paneli</span>
+        <span class="kenar__altbaslik">{{ oturum.sirketAdi ?? 'genel yönetim' }}</span>
       </div>
     </div>
 
@@ -68,7 +68,7 @@ async function parolaDegistir() {
         <span class="kenar__avatar">{{ basHarfler }}</span>
         <span class="kenar__ad">
           <span class="kenar__kisi">{{ oturum.kullanici?.adSoyad }}</span>
-          <span class="kenar__rol">{{ oturum.admin ? 'Yönetici' : 'Moderatör' }}</span>
+          <span class="kenar__rol">{{ oturum.rolEtiketi }}</span>
         </span>
         <AppIcon ad="asagi" :boyut="15" />
       </button>

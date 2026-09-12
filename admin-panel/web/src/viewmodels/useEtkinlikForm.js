@@ -1,7 +1,6 @@
 import { computed, reactive, ref } from 'vue';
 import { etkinlikService } from '@/services';
 import { apiyeDatetime, girdiyeDatetime } from '@/utils/format.js';
-import { useOturumStore } from '@/stores/oturum.js';
 
 export const BOS_MODEL = () => ({
   baslik: '',
@@ -16,6 +15,7 @@ export const BOS_MODEL = () => ({
   bitis: '',
   sonBasvuru: '',
   kontenjan: 100,
+  kapakGorseli: null,
   sartOgrenimDuzeyi: 'lisans',
   sartSiniflar: [],
   sartBolumIdleri: [],
@@ -37,22 +37,11 @@ export const ADIMLAR = [
 
 /** Yeni etkinlik / düzenleme ViewModel'i: model, doğrulama, adım durumu, kaydetme. */
 export function useEtkinlikForm() {
-  const oturum = useOturumStore();
   const model = reactive(BOS_MODEL());
   const adim = ref(0);
   const kaydediyor = ref(false);
   const sunucuHatalari = ref({});
   const duzenlenenId = ref(null);
-
-  // Şirket kullanıcısı ise şirketi otomatik ata ve kitle
-  if (!oturum.admin && oturum.kullanici?.sirketId) {
-    model.sirketId = oturum.kullanici.sirketId;
-    if (oturum.kullanici.eposta && !model.iletisimEpostasi) {
-      model.iletisimEpostasi = oturum.kullanici.eposta;
-    }
-  }
-
-  const sirketSecimiKilitli = computed(() => !oturum.admin && !!oturum.kullanici?.sirketId);
 
   const hatalar = computed(() => {
     const h = {};
@@ -109,6 +98,7 @@ export function useEtkinlikForm() {
       bitis: girdiyeDatetime(detay.bitis),
       sonBasvuru: detay.sonBasvuru ?? '',
       kontenjan: detay.kontenjan,
+      kapakGorseli: detay.kapakGorseli ?? null,
       sartOgrenimDuzeyi: detay.sartlar.ogrenimDuzeyi ?? 'lisans',
       sartSiniflar: [...detay.sartlar.siniflar],
       sartBolumIdleri: detay.sartlar.bolumler.map((b) => b.id),
@@ -126,7 +116,7 @@ export function useEtkinlikForm() {
     baslik: model.baslik.trim(),
     aciklama: model.aciklama.trim() || null,
     tur: model.tur,
-    sirketId: (!oturum.admin && oturum.kullanici?.sirketId) ? Number(oturum.kullanici.sirketId) : Number(model.sirketId),
+    sirketId: Number(model.sirketId),
     iletisimEpostasi: model.iletisimEpostasi.trim() || null,
     sehirId: Number(model.sehirId),
     ilce: model.ilce.trim() || null,
@@ -135,6 +125,7 @@ export function useEtkinlikForm() {
     bitis: apiyeDatetime(model.bitis),
     sonBasvuru: model.sonBasvuru || null,
     kontenjan: Number(model.kontenjan),
+    kapakGorseli: model.kapakGorseli || null,
     sartOgrenimDuzeyi: model.sartOgrenimDuzeyi || null,
     sartSiniflar: [...model.sartSiniflar],
     sartBolumIdleri: model.sartBolumIdleri.map(Number),
@@ -172,6 +163,5 @@ export function useEtkinlikForm() {
   return {
     model, adim, ADIMLAR, adimDurumu, adimGecerli, ileri, geri,
     hatalar, gecerli, kaydediyor, duzenlenenId, cokluSec, doldur, kaydet,
-    sirketSecimiKilitli,
   };
 }

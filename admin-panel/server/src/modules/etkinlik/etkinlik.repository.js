@@ -157,6 +157,21 @@ export async function sil(id) {
   return sonuc.affectedRows > 0;
 }
 
+/** Excel raporunun okuduğu tam katılımcı listesi. */
+export const katilimcilar = (etkinlikId) =>
+  queryAll(
+    `SELECT b.id, b.durum, b.basvuru_tarihi, b.karar_tarihi, b.not_dusuldu,
+            o.ad_soyad, o.eposta, o.ogrenci_no, o.universite,
+            o.ogrenim_duzeyi, o.sinif, o.not_ortalamasi,
+            bl.ad AS bolum_adi
+     FROM basvurular b
+     JOIN ogrenciler o ON o.id = b.ogrenci_id
+     LEFT JOIN bolumler bl ON bl.id = o.bolum_id
+     WHERE b.etkinlik_id = :id
+     ORDER BY FIELD(b.durum,'onaylandi','yedek','beklemede','reddedildi','iptal'), o.ad_soyad`,
+    { id: etkinlikId },
+  );
+
 export async function sonrakiKod(yil) {
   const satir = await queryOne(
     `SELECT kod FROM etkinlikler WHERE kod LIKE :onek ORDER BY kod DESC LIMIT 1`,

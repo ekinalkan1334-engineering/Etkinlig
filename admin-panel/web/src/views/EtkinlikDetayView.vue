@@ -12,23 +12,16 @@ import StatKart from '@/components/ui/StatKart.vue';
 import DurumMesaji from '@/components/ui/DurumMesaji.vue';
 import { useEtkinlikDetay } from '@/viewmodels/useEtkinlikDetay.js';
 import { useTanimlarStore } from '@/stores/tanimlar.js';
-import { useOturumStore } from '@/stores/oturum.js';
+import { etkinlikService } from '@/services';
 import { saat, sinifEtiketi, tarih, tarihUzun } from '@/utils/format.js';
 
 const route = useRoute();
 const router = useRouter();
 const tanimlar = useTanimlarStore();
-const oturum = useOturumStore();
 const vm = useEtkinlikDetay(Number(route.params.id));
+const raporAdresi = etkinlikService.raporAdresi(Number(route.params.id));
 
 onMounted(() => vm.yukle());
-
-const duzenleyebilir = (e) => {
-  if (!e) return false;
-  if (oturum.admin) return true;
-  if (!oturum.kullanici?.sirketId) return false;
-  return e.sirket?.id === oturum.kullanici.sirketId;
-};
 
 const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 </script>
@@ -40,15 +33,16 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
   >
     <template #aksiyon>
       <AppButton cesit="hayalet" simge="geri" @click="router.push({ name: 'etkinlikler' })">Listeye dön</AppButton>
-      <template v-if="duzenleyebilir(vm.etkinlik.value)">
-        <AppButton simge="duzenle" @click="router.push({ name: 'etkinlik-duzenle', params: { id: route.params.id } })">
-          Düzenle
-        </AppButton>
-        <AppButton
-          v-if="vm.etkinlik.value?.durum === 'taslak'" cesit="birincil" simge="onay"
-          @click="vm.durumDegistir('yayinda')"
-        >Yayınla</AppButton>
-      </template>
+      <a :href="raporAdresi" class="rapor-baglantisi">
+        <AppButton simge="disaAktar">Katılımcıları Excel indir</AppButton>
+      </a>
+      <AppButton simge="duzenle" @click="router.push({ name: 'etkinlik-duzenle', params: { id: route.params.id } })">
+        Düzenle
+      </AppButton>
+      <AppButton
+        v-if="vm.etkinlik.value?.durum === 'taslak'" cesit="birincil" simge="onay"
+        @click="vm.durumDegistir('yayinda')"
+      >Yayınla</AppButton>
     </template>
   </AppUstCubuk>
 
@@ -73,8 +67,15 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
             <StatKart etiket="Boş kontenjan" :deger="vm.sayaclar.value.bos" :alt-bilgi="`${vm.etkinlik.value.kontenjan} kapasite`" ton="uyari" simge="kisiler" />
           </div>
 
-          <AppKart baslik="Açıklama">
-            <p class="aciklama">{{ vm.etkinlik.value.aciklama || 'Açıklama girilmemiş.' }}</p>
+          <AppKart :govde-dolgusu="vm.etkinlik.value.kapakGorseli ? '0' : '20px'">
+            <img
+              v-if="vm.etkinlik.value.kapakGorseli"
+              :src="vm.etkinlik.value.kapakGorseli" alt="Etkinlik kapak görseli" class="kapak"
+            />
+            <div :class="{ kapakli: vm.etkinlik.value.kapakGorseli }">
+              <h2 class="bolum-basligi">Açıklama</h2>
+              <p class="aciklama">{{ vm.etkinlik.value.aciklama || 'Açıklama girilmemiş.' }}</p>
+            </div>
           </AppKart>
 
           <AppKart baslik="Başvurular" govde-dolgusu="18px 6px 6px">
@@ -209,6 +210,7 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 <style scoped>
 .sayfa { padding: 26px 32px 32px; display: flex; flex-direction: column; gap: 18px; }
 
+.rapor-baglantisi { display: inline-flex; }
 .ust-satir { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ust-satir__zaman { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
 
@@ -217,6 +219,9 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 @media (max-width: 1100px) { .izgara { grid-template-columns: minmax(0, 1fr); } }
 
 .kartlar { display: flex; gap: 16px; flex-wrap: wrap; }
+.kapak { display: block; width: 100%; aspect-ratio: 1200 / 500; object-fit: cover; border-radius: var(--r-lg) var(--r-lg) 0 0; }
+.kapakli { padding: 20px; }
+.bolum-basligi { font-size: 16px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 14px; }
 .aciklama { margin: 0; font-size: 14px; line-height: 1.7; color: var(--ink-2); }
 
 .basvuru-filtre { display: flex; gap: 9px; }

@@ -49,12 +49,20 @@ CREATE TABLE kullanicilar (
   ad_soyad      VARCHAR(120) NOT NULL,
   eposta        VARCHAR(160) NOT NULL,
   parola_hash   VARCHAR(255) NOT NULL,
-  rol           ENUM('admin','moderator') NOT NULL DEFAULT 'moderator',
+  -- admin: tüm şirketleri görür · sirket_admin: yalnızca kendi şirketini
+  rol           ENUM('admin','sirket_admin') NOT NULL DEFAULT 'sirket_admin',
+  sirket_id     INT UNSIGNED NULL,
   aktif         TINYINT(1)   NOT NULL DEFAULT 1,
   son_giris     DATETIME     NULL,
   olusturuldu   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_kullanicilar_eposta (eposta)
+  UNIQUE KEY uq_kullanicilar_eposta (eposta),
+  KEY ix_kullanicilar_sirket (sirket_id),
+  CONSTRAINT fk_kullanicilar_sirket FOREIGN KEY (sirket_id) REFERENCES sirketler(id) ON DELETE CASCADE,
+  -- Genel admin şirkete bağlı olmaz; şirket admini mutlaka bir şirkete bağlıdır.
+  CONSTRAINT ck_kullanicilar_kapsam CHECK (
+    (rol = 'admin' AND sirket_id IS NULL) OR (rol = 'sirket_admin' AND sirket_id IS NOT NULL)
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_turkish_ci;
 
 CREATE TABLE ogrenciler (

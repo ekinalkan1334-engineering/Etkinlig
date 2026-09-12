@@ -47,8 +47,15 @@ Vite `/api` isteklerini 4000'e proxy'ler, ayrıca CORS ayarı gerekmez.
 
 **4. Giriş**
 
-Seed ile birlikte bir yönetici gelir: **admin@etkinlig.local / Admin1234!** — ilk girişten sonra
-sol alttaki hesap menüsünden parolayı değiştirin.
+Seed dört hesap açar, hepsinin parolası **Admin1234!** — ilk girişten sonra sol alttaki
+hesap menüsünden değiştirin.
+
+| Hesap | Rol | Görebildiği |
+|---|---|---|
+| `admin@etkinlig.local` | Genel yönetici | Tüm şirketler, tüm başvurular, hesap açma |
+| `deniz@technobridge.com.tr` | Şirket yöneticisi | Yalnızca TechnoBridge |
+| `selin@papara.com` | Şirket yöneticisi | Yalnızca Papara |
+| `kaan@aselsan.com.tr` | Şirket yöneticisi | Yalnızca ASELSAN |
 
 Seed'i yüklemeden (yani `kullanicilar` tablosu boşken) açarsanız giriş ekranı kendini
 kurulum ekranına çevirir ve ilk yönetici hesabını orada açarsınız. Bu uç, sistemde
@@ -74,6 +81,7 @@ kullanıcı olduğu anda kapanır.
 |---|---|
 | `GET /api/etkinlikler` | `arama, tur, durum, sehirId, sirketId, siralama, yon, sayfa, limit` |
 | `GET /api/etkinlikler/:id` | şartlar ve ayarlar dahil detay |
+| `GET /api/etkinlikler/:id/katilimcilar.xlsx` | etkinliğin katılımcı listesi, Excel |
 | `POST /api/etkinlikler` | oluştur (kod otomatik: `ETK-2026-0001`) |
 | `PUT /api/etkinlikler/:id` | güncelle |
 | `PATCH /api/etkinlikler/:id/durum` | taslak ↔ yayında |
@@ -104,6 +112,67 @@ kullanıcı olduğu anda kapanır.
 Cevap zarfı her yerde aynı: başarı `{ data, meta? }`, hata `{ error: { code, message, details? } }`.
 Hata kodları: `gecersiz_istek`, `kimlik_hatasi`, `yetki_yok`, `hesap_pasif`, `bulunamadi`, `cakisma`, `sunucu_hatasi`.
 
+## Vitrin (öğrenci tarafı)
+
+Kökteki React uygulaması (`~/etkinlig`, port 5173) artık sabit veri yerine API'den besleniyor.
+Panelde **Yayınla** denen etkinlik anında orada görünür.
+
+- `GET /api/acik/etkinlikler` — yalnızca `durum='yayinda'` kayıtlar; arama, tür ve şehir filtresi
+- `GET /api/acik/etkinlikler/:id` — açıklama, ön katılım şartları, adres
+- `GET /api/acik/filtreler` — yalnızca yayında etkinliği olan şehir ve türler
+
+Bu uçlar oturum istemez ama dar tutulur: taslak/iptal etkinlikler, iletişim e-postası,
+oluşturan kullanıcı ve başvuran öğrenci bilgileri buradan **asla** dönmez. Vitrin
+`vite.config.js` üzerinden `/api` ve `/yuklemeler` isteklerini 4000'e proxy'ler.
+
+Eski kayıt formu silinmedi: `src/KayitFormu.jsx` olarak duruyor, vitrinin sağ üstündeki
+"Kayıt ol" düğmesiyle açılıyor. Eski sürümler `src/App.jsx.yedek` ve `src/KayitFormu.css`'te.
+
+## Görseller
+
+`POST /api/gorseller` (oturum gerekli) — form alanı `gorsel`. PNG, JPG veya WEBP, en fazla 2 MB.
+Dosya adı istemciden alınmaz: rastgele ad + izinli uzantı üretilir, `server/uploads/` altına yazılır
+ve `/yuklemeler/<ad>` yolundan servis edilir. Yol kaçışı, üzerine yazma ve `.svg` gibi
+script taşıyabilen türler bu yüzden mümkün değil.
+
+Panelde etkinlik formunun sağ sütununda sürükle-bırak alanı var; yüklenen görsel etkinlik
+detayında ve vitrindeki kartta kapak olarak çıkar. Görseli olmayan etkinlik, türüne göre
+renkli bir yedek blokla gösterilir.
+
+## Şirket kapsamı (çok kiracılılık)
+
+İki rol var:
+
+- **`admin` — genel yönetici.** Şirkete bağlı değildir; tüm şirketlerin etkinliklerini ve
+  başvurularını görür, şirket ve hesap açar.
+- **`sirket_admin` — şirket yöneticisi.** Bir şirkete bağlıdır. Kendi şirketi adına etkinlik
+  açar/düzenler, kendi başvurularını onaylar, kendi etkinliklerinin Excel raporunu indirir.
+  Başka şirketin hiçbir kaydını göremez.
+
+Kapsam tek dosyada toplanır: `server/src/core/kapsam.js`. Her liste sorgusu `filtreyiDarslat`,
+her yazma `govdeyiDarslat`, her tekil kayıt `kaydaErisimDogrula` üzerinden geçer — kural
+modüllere dağılmadığı için bir uç eklerken kapsamı unutmak zorlaşır.
+
+İki davranış bilinçli:
+
+- Kapsam dışındaki bir kayıt **404** döner, 403 değil. Aksi halde başka şirketin hangi
+  id'lerinin var olduğu dışarıdan sayılabilirdi.
+- Şirket admini `?sirketId=` ile başka bir şirketi sorgularsa istek **403** ile reddedilir;
+  sessizce kendi şirketine döndürülmez — filtrenin çalıştığı yanılgısı yaratmasın.
+- Oturumdaki kullanıcı her istekte veritabanından tazelenir, jetondan okunmaz: rolü veya
+  şirketi değiştirilen bir hesap eski jetonuyla eski yetkisini kullanamaz.
+
+## Excel raporu
+
+`GET /api/etkinlikler/:id/katilimcilar.xlsx` — etkinlik özelinde katılımcı listesi.
+Başlık bloğunda etkinlik adı, şirket, kod, tarih/yer ve başvuru sayıları; altında 13 sütunluk
+filtrelenebilir tablo (ad soyad, e-posta, öğrenci no, üniversite, bölüm, düzey, sınıf, ortalama,
+başvuru tarihi, durum, karar tarihi, not). Durumlar Türkçeleştirilir ve renklenir; satırlar
+onaylı → yedek → beklemede → reddedildi sırasıyla gelir.
+
+Ucu şirket admini de çağırabilir ama yalnızca kendi etkinlikleri için — kapsam kontrolü
+dosya üretilmeden önce çalışır. Arayüzde hem etkinlik detayında hem liste satırlarında düğme var.
+
 ## Güvenlik notları
 
 - Parolalar bcrypt (cost 10) ile saklanır; hash hiçbir cevapta dışarı çıkmaz.
@@ -111,8 +180,11 @@ Hata kodları: `gecersiz_istek`, `kimlik_hatasi`, `yetki_yok`, `hesap_pasif`, `b
   iken `secure` bayrağı açılır ve `JWT_SECRET` 32 karakterden kısaysa API açılmaz.
 - Girişte kullanıcı bulunamasa bile bcrypt karşılaştırması yapılır — "bu e-posta kayıtlı mı"
   sorusu yanıt süresinden okunamaz.
-- Son aktif yönetici pasifleştirilemez, rolü düşürülemez ve silinemez; kimse kendi hesabını
-  silemez veya devre dışı bırakamaz.
+- Son aktif genel yönetici pasifleştirilemez, rolü düşürülemez ve silinemez; kimse kendi
+  hesabını silemez veya devre dışı bırakamaz.
+- Şirket silinince ona bağlı hesaplar da silinir (`ON DELETE CASCADE`); şemadaki `CHECK`
+  kısıtı sayesinde şirketsiz bir `sirket_admin` veya şirkete bağlı bir `admin` satırı
+  veritabanına hiç giremez.
 
 ## Mimari
 
@@ -149,5 +221,7 @@ View içinde `fetch` veya iş kuralı yok; her ekran kendi ViewModel'ini çağı
 ## Notlar
 
 - `02_seed.sql` içindeki şirket, etkinlik ve öğrenci kayıtları örnek veridir; gerçek veri değildir.
-- Kapak görseli alanı yol tutuyor; dosya yükleme ucu henüz yazılmadı.
 - Parola sıfırlama e-postası yok — yönetici, Kullanıcılar ekranından doğrudan yeni parola atar.
+- Vitrindeki "Başvur" düğmesi henüz bağlı değil; öğrenci kaydı ve başvuru akışı yazılmadı.
+- Silinen etkinliğin görseli `server/uploads/` içinde kalır; artık kullanılmayan dosyaları
+  temizleyen bir iş yok.

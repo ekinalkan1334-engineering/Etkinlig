@@ -14,6 +14,7 @@ import DurumMesaji from '@/components/ui/DurumMesaji.vue';
 import { useEtkinlikListesi } from '@/viewmodels/useEtkinlikListesi.js';
 import { useTanimlarStore } from '@/stores/tanimlar.js';
 import { useOturumStore } from '@/stores/oturum.js';
+import { etkinlikService } from '@/services';
 import { saat, tarih } from '@/utils/format.js';
 
 const router = useRouter();
@@ -23,14 +24,7 @@ const vm = useEtkinlikListesi();
 
 onMounted(() => vm.yukle());
 
-const duzenleyebilir = (e) => {
-  if (oturum.admin) return true;
-  if (!oturum.kullanici?.sirketId) return false;
-  return e.sirket?.id === oturum.kullanici.sirketId;
-};
-
 async function sil(e) {
-  if (!duzenleyebilir(e)) return;
   if (!window.confirm(`"${e.baslik}" silinsin mi? Bu işlem geri alınamaz.`)) return;
   await vm.sil(e.id);
 }
@@ -61,6 +55,10 @@ async function sil(e) {
       >{{ t.etiket }}</SecimCipi>
 
       <div class="filtreler__sag">
+        <select v-if="oturum.admin" v-model="vm.filtre.sirketId" class="secim" aria-label="Şirket filtresi">
+          <option value="">Şirket: Tümü</option>
+          <option v-for="s in tanimlar.sirketler" :key="s.id" :value="s.id">{{ s.ad }}</option>
+        </select>
         <select v-model="vm.filtre.sehirId" class="secim" aria-label="Şehir filtresi">
           <option value="">Şehir: Tümü</option>
           <option v-for="s in tanimlar.sehirler" :key="s.id" :value="s.id">{{ s.ad }}</option>
@@ -109,14 +107,14 @@ async function sil(e) {
               <td><DurumRozeti :durum="e.durum" /></td>
               <td class="sag">
                 <div class="islemler">
-                  <template v-if="duzenleyebilir(e)">
-                    <AppButton
-                      yalniz-simge simge="duzenle" title="Düzenle"
-                      @click="router.push({ name: 'etkinlik-duzenle', params: { id: e.id } })"
-                    />
-                    <AppButton yalniz-simge simge="cop" cesit="tehlike" title="Sil" @click="sil(e)" />
-                  </template>
-                  <span v-else class="hucre__alt" title="Yalnızca kendi şirketinizin etkinliklerini düzenleyebilirsiniz">—</span>
+                  <a :href="etkinlikService.raporAdresi(e.id)" title="Katılımcıları Excel indir">
+                    <AppButton yalniz-simge simge="disaAktar" />
+                  </a>
+                  <AppButton
+                    yalniz-simge simge="duzenle" title="Düzenle"
+                    @click="router.push({ name: 'etkinlik-duzenle', params: { id: e.id } })"
+                  />
+                  <AppButton yalniz-simge simge="cop" cesit="tehlike" title="Sil" @click="sil(e)" />
                 </div>
               </td>
             </tr>

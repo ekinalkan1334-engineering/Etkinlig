@@ -1,6 +1,9 @@
 import 'dotenv/config';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const num = (v, fallback) => (v === undefined || v === '' ? fallback : Number(v));
+const kok = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 const uretim = process.env.NODE_ENV === 'production';
 
@@ -12,7 +15,11 @@ if (uretim && jwtGizli.length < 32) {
 export const env = {
   uretim,
   port: num(process.env.PORT, 4000),
-  corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+  // Panel (5174) ve vitrin (5173) aynı API'yi kullanır.
+  corsOrigin: (process.env.CORS_ORIGIN ?? 'http://localhost:5174,http://localhost:5173')
+    .split(',').map((s) => s.trim()).filter(Boolean),
+  yuklemeKlasoru: process.env.UPLOAD_DIR ?? path.join(kok, 'uploads'),
+  yuklemeYolu: '/yuklemeler',
   jwt: {
     gizli: jwtGizli || 'gelistirme-icin-gecici-anahtar-degistirin',
     sure: process.env.JWT_EXPIRES ?? '8h',

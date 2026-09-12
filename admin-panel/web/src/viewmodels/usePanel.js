@@ -8,15 +8,21 @@ export function usePanel() {
   const { veri, yukleniyor, hata, calistir } = useAsyncKaynak(() => istatistikService.panel());
   const ozet = computed(() => veri.value?.data ?? null);
 
+  const tumSirketler = computed(() => ozet.value?.kapsam === 'tum-sirketler');
+
   const kartlar = computed(() => {
     const k = ozet.value?.kartlar;
     if (!k) return [];
-    return [
+    const liste = [
       { anahtar: 'aktifEtkinlik', etiket: 'Aktif etkinlik', deger: k.aktifEtkinlik, ton: 'konferans', simge: 'takvim' },
       { anahtar: 'bekleyenBasvuru', etiket: 'Bekleyen başvuru', deger: k.bekleyenBasvuru, ton: 'hackathon', simge: 'gelen' },
       { anahtar: 'onayliKatilimci', etiket: 'Onaylı katılımcı', deger: k.onayliKatilimci, ton: 'sunum', simge: 'kisiler' },
-      { anahtar: 'kayitliSirket', etiket: 'Kayıtlı şirket', deger: k.kayitliSirket, ton: 'uyari', simge: 'bina' },
     ];
+    // Şirket adminine "kayıtlı şirket: 1" göstermek bilgi taşımaz.
+    if (tumSirketler.value) {
+      liste.push({ anahtar: 'kayitliSirket', etiket: 'Kayıtlı şirket', deger: k.kayitliSirket, ton: 'uyari', simge: 'bina' });
+    }
+    return liste;
   });
 
   /** Grafik için normalize edilmiş aylık seri. */
@@ -37,5 +43,5 @@ export function usePanel() {
   const sonBasvurular = computed(() => ozet.value?.sonBasvurular ?? []);
   const sehirDagilimi = computed(() => ozet.value?.sehirDagilimi ?? []);
 
-  return { kartlar, aylik, yaklasan, sonBasvurular, sehirDagilimi, yukleniyor, hata, yukle: calistir };
+  return { kartlar, aylik, yaklasan, sonBasvurular, sehirDagilimi, tumSirketler, yukleniyor, hata, yukle: calistir };
 }

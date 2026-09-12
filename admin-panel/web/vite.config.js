@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
+  base: '/etkinlig/admin/',
   plugins: [vue()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
@@ -12,6 +13,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': { target: 'http://localhost:4000', changeOrigin: true },
+      '/etkinlig/api': { target: 'http://localhost:4000', changeOrigin: true },
     },
   },
 });

@@ -1,4 +1,4 @@
-const TEMEL = import.meta.env.VITE_API_URL ?? '/api';
+const TEMEL = import.meta.env.VITE_API_URL ?? '/etkinlig/api';
 
 export class ApiHatasi extends Error {
   constructor(status, code, message, details) {
