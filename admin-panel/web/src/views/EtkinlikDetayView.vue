@@ -24,6 +24,7 @@ const vm = useEtkinlikDetay(Number(route.params.id));
 const raporAdresi = etkinlikService.raporAdresi(Number(route.params.id));
 
 const resimHatasi = ref(false);
+const tamBoyAc = (url) => { if (url) window.open(url, '_blank'); };
 
 onMounted(() => vm.yukle());
 
@@ -77,13 +78,27 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
           </div>
 
           <AppKart :govde-dolgusu="vm.etkinlik.value.kapakGorseli && !resimHatasi ? '0' : '20px'">
-            <img
+            <div
               v-if="vm.etkinlik.value.kapakGorseli && !resimHatasi"
-              :src="vm.etkinlik.value.kapakGorseli"
-              alt="Etkinlik kapak görseli"
-              class="kapak"
-              @error="resimHatasi = true"
-            />
+              class="kapak-sarmal"
+              title="Görseli tam boy açmak için tıklayın"
+              @click="tamBoyAc(vm.etkinlik.value.kapakGorseli)"
+            >
+              <div
+                class="kapak-arka"
+                :style="{ backgroundImage: `url('${vm.etkinlik.value.kapakGorseli}')` }"
+              />
+              <img
+                :src="vm.etkinlik.value.kapakGorseli"
+                alt="Etkinlik kapak görseli"
+                class="kapak"
+                @error="resimHatasi = true"
+              />
+              <span class="kapak-buyut-ipucu">
+                <AppIcon ad="ara" :boyut="13" />
+                <span>Tam boy aç</span>
+              </span>
+            </div>
             <div :class="{ kapakli: vm.etkinlik.value.kapakGorseli && !resimHatasi }">
               <h2 class="bolum-basligi">Açıklama</h2>
               <p class="aciklama">{{ vm.etkinlik.value.aciklama || 'Açıklama girilmemiş.' }}</p>
@@ -230,9 +245,65 @@ const basHarfler = (ad) => ad.split(' ').map((p) => p[0]).join('').slice(0, 2);
 .izgara__ana, .izgara__yan { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 @media (max-width: 1100px) { .izgara { grid-template-columns: minmax(0, 1fr); } }
 
-.kartlar { display: flex; gap: 16px; flex-wrap: wrap; }
-.kapak { display: block; width: 100%; aspect-ratio: 1200 / 500; object-fit: cover; border-radius: var(--r-lg) var(--r-lg) 0 0; }
-.kapakli { padding: 20px; }
+.kapak-sarmal {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  max-height: 180px;
+  overflow: hidden;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--paper-2, #f7f2e8);
+  border-bottom: 1px solid var(--line, #e4dfd7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.kapak-arka {
+  position: absolute;
+  inset: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(24px) brightness(0.9) opacity(0.35);
+  transform: scale(1.15);
+  pointer-events: none;
+}
+.kapak {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  z-index: 1;
+  transition: transform 0.2s ease;
+}
+.kapak-sarmal:hover .kapak {
+  transform: scale(1.02);
+}
+.kapak-buyut-ipucu {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(31, 25, 21, 0.72);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 2;
+  pointer-events: none;
+}
+.kapak-sarmal:hover .kapak-buyut-ipucu {
+  opacity: 1;
+}
 .bolum-basligi { font-size: 16px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 14px; }
 .aciklama { margin: 0; font-size: 14px; line-height: 1.7; color: var(--ink-2); }
 
